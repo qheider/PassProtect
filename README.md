@@ -194,7 +194,7 @@ Each tool is automatically converted to OpenAI's function calling format, enabli
 
 #### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - OpenAI API key
 - Python virtual environment
 - All dependencies from `requirements.txt`
@@ -285,7 +285,7 @@ You: Delete the user with username testuser
 - **Conversation History**: Maintains context across multiple interactions
 - **Error Handling**: Provides clear, user-friendly error messages
 - **Interactive Mode**: Continuous conversation with the ability to exit anytime
-- **Confirmation Prompts**: Built-in safeguards for destructive operations (the OpenAI model asks for confirmation when appropriate)
+- **Smart Responses**: The agent provides context-aware responses and can ask clarifying questions when needed
 - **Tool Visibility**: Shows which tools are being called and with what arguments
 
 ### Technical Details
