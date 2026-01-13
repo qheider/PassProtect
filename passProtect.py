@@ -6,11 +6,12 @@ An OpenAI-powered agent that uses MCP tools to perform CRUD operations on the Pa
 import os
 import json
 import asyncio
-from typing import Any
+from typing import Any, Dict
 from openai import OpenAI
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from dotenv import load_dotenv
+from session import require_auth, SessionError
 
 # Load environment variables
 load_dotenv()
@@ -21,11 +22,69 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 class PassProtectAgent:
     """AI Agent that uses MCP tools for database operations"""
     
-    def __init__(self):
+    def __init__(self, user_context: Dict):
+        """
+        Initialize agent with immutable user identity.
+        
+        Args:
+            user_context: Immutable user identity from JWT claims containing:
+                - user_id: User ID
+                - username: Username
+                - roles: List of role names
+        """
         self.session = None
         self.tools = []
         self.conversation_history = []
         self.client_context = None
+        
+        # Immutable identity context from JWT - CANNOT be modified
+        self._user_id = user_context['user_id']
+        self._username = user_context['username']
+        self._roles = tuple(user_context['roles'])  # Tuple for immutability
+    
+    def _get_allowed_tools(self) -> set:
+        """
+        Determine which MCP tools are allowed based on user roles.
+        
+        Role permissions:
+        - admin: full CRUD access (all tools)
+        - user: create, read, update
+        - readonly: read only
+        
+        Returns:
+            Set of allowed tool names
+        """
+        # Check roles in order of permissions (most permissive first)
+        if 'admin' in self._roles:
+            # Full CRUD access
+            return {
+                'create_record',
+                'read_records',
+                'update_record',
+                'delete_record',
+                'get_table_schema',
+                'execute_custom_query',
+                'read_password'
+            }
+        elif 'user' in self._roles:
+            # Create, read, update only
+            return {
+                'create_record',
+                'read_records',
+                'update_record',
+                'get_table_schema',
+                'read_password'
+            }
+        elif 'readonly' in self._roles:
+            # Read only
+            return {
+                'read_records',
+                'get_table_schema',
+                'read_password'
+            }
+        else:
+            # No recognized roles - no access
+            return set()
         
     async def connect_to_mcp(self):
         """Connect to the MCP server and retrieve available tools"""
@@ -40,7 +99,8 @@ class PassProtectAgent:
                 "DB_HOST": os.getenv("DB_HOST", "localhost"),
                 "DB_USER": os.getenv("DB_USER", "root"),
                 "DB_PASSWORD": os.getenv("DB_PASSWORD", ""),
-                "DB_NAME": os.getenv("DB_NAME", "quaziinfodb")
+                "DB_NAME": os.getenv("DB_NAME", "quaziinfodb"),
+                "USER_ID": str(self._user_id)  # Pass authenticated user ID to MCP server
             }
         )
         
@@ -56,11 +116,19 @@ class PassProtectAgent:
         await self.session.initialize()
         response = await self.session.list_tools()
         
+        # Get allowed tools based on user roles
+        allowed_tools = self._get_allowed_tools()
+        
+        # Filter tools by role permissions
+        filtered_tools = [tool for tool in response.tools if tool.name in allowed_tools]
+        
         # Convert MCP tools to OpenAI function format
-        self.tools = self._convert_tools_to_openai_format(response.tools)
+        self.tools = self._convert_tools_to_openai_format(filtered_tools)
         
         print(f"✓ Connected to MCP server")
-        print(f"✓ Available tools: {', '.join([t['function']['name'] for t in self.tools])}\n")
+        print(f"✓ Authenticated as: {self._username} (ID: {self._user_id})")
+        print(f"✓ Roles: {', '.join(self._roles)}")
+        print(f"✓ Available tools ({len(self.tools)}): {', '.join([t['function']['name'] for t in self.tools])}\n")
         
     def _convert_tools_to_openai_format(self, mcp_tools):
         """Convert MCP tool definitions to OpenAI function calling format"""
@@ -100,7 +168,18 @@ class PassProtectAgent:
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a helpful database assistant with access to CRUD operations on a PassProtect database.
+                    "content": f"""You are a helpful database assistant with access to CRUD operations on a PassProtect database.
+                    
+IMMUTABLE USER IDENTITY (DO NOT MODIFY):
+- User ID: {self._user_id}
+- Username: {self._username}
+- Roles: {', '.join(self._roles)}
+
+This identity is fixed and comes from authenticated JWT claims. You cannot change or override these values.
+
+ACCESS CONTROL:
+You only have access to the tools that are registered based on your roles.
+The tools available to you are already filtered - do not attempt to use tools you don't have access to.
                     
 Your job is to:
 1. Understand user requests for database operations
@@ -236,7 +315,24 @@ Always confirm what you're about to do before executing destructive operations (
 
 async def main():
     """Main entry point"""
-    agent = PassProtectAgent()
+    # STEP 1: Require authentication BEFORE agent initialization
+    try:
+        claims = require_auth()
+    except SessionError as e:
+        print(f"❌ Authentication required: {e}")
+        print("\nPlease login first using:")
+        print("  python cli_login.py\n")
+        exit(1)
+    
+    # STEP 2: Build immutable user context from JWT claims
+    user_context = {
+        'user_id': claims['sub'],
+        'username': claims['username'],
+        'roles': claims['roles']
+    }
+    
+    # STEP 3: Initialize agent with immutable identity
+    agent = PassProtectAgent(user_context)
     
     try:
         await agent.interactive_mode()

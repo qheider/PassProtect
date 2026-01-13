@@ -20,6 +20,9 @@ DB_CONFIG = {
     'database': os.getenv('DB_NAME', 'quaziinfodb')
 }
 
+# Authenticated user context from environment
+AUTHENTICATED_USER_ID = os.getenv('USER_ID')
+
 app = Server("passprotect-mcp-server")
 
 
@@ -150,6 +153,20 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": ["query"]
             }
+        ),
+        Tool(
+            name="read_password",
+            description="Read a password for a specific company. Only returns passwords belonging to the authenticated user. User identity is automatically enforced.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "company": {
+                        "type": "string",
+                        "description": "The company name to retrieve the password for"
+                    }
+                },
+                "required": ["company"]
+            }
         )
     ]
 
@@ -251,6 +268,30 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             return [TextContent(
                 type="text",
                 text=f"Query results:\n{json.dumps(results, indent=2, default=str)}"
+            )]
+        
+        elif name == "read_password":
+            # Security: user_id comes from context (environment), NOT from arguments
+            if not AUTHENTICATED_USER_ID:
+                return [TextContent(type="text", text="Error: User authentication context not found")]
+            
+            company = arguments.get("company", "")
+            if not company:
+                return [TextContent(type="text", text="Error: Company name is required")]
+            
+            # Parameterized query with user_id AND company
+            # This ensures users can ONLY access their own passwords
+            query = "SELECT id, company, password FROM passprotect WHERE user_id = %s AND company = %s"
+            results = execute_query(query, (AUTHENTICATED_USER_ID, company), fetch=True)
+            
+            if not results:
+                return [TextContent(type="text", text=f"Not found: No password for company '{company}'")]
+            
+            # Return the password record
+            record = results[0]
+            return [TextContent(
+                type="text",
+                text=f"Password for {record['company']}:\n{json.dumps(record, indent=2, default=str)}"
             )]
         
         else:
