@@ -6,12 +6,16 @@ An OpenAI-powered agent that uses MCP tools to perform CRUD operations on the Pa
 import os
 import json
 import asyncio
+import getpass
 from typing import Any, Dict
 from openai import OpenAI
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from dotenv import load_dotenv
 from session import require_auth, SessionError
+from auth import authenticate_user, load_user_roles, AuthenticationError
+from jwt_utils import create_token, TokenError
+from cli_login import save_session, update_last_login
 
 # Load environment variables
 load_dotenv()
@@ -313,16 +317,77 @@ Always confirm what you're about to do before executing destructive operations (
             await self.client_context.__aexit__(None, None, None)
 
 
+def perform_login():
+    """
+    Perform interactive login when authentication is required.
+    Returns the JWT claims if successful, None otherwise.
+    """
+    print("\n" + "="*60)
+    print("Authentication Required")
+    print("="*60)
+    print("Please login to continue:\n")
+    
+    try:
+        # Prompt for credentials
+        username = input("Username: ").strip()
+        password = getpass.getpass("Password: ")
+        
+        if not username or not password:
+            print("❌ Error: Username and password are required")
+            return None
+        
+        # Authenticate user
+        user = authenticate_user(username, password)
+        
+        # Load user roles
+        roles = load_user_roles(user['id'])
+        
+        # Generate JWT token
+        token = create_token(
+            user_id=user['id'],
+            username=user['userName'],
+            roles=roles
+        )
+        
+        # Update lastLogin timestamp
+        update_last_login(user['id'])
+        
+        # Save session
+        save_session(token)
+        
+        print(f"✓ Login successful. Welcome, {user['userName']}!\n")
+        
+        # Return claims for immediate use
+        return {
+            'sub': str(user['id']),
+            'username': user['userName'],
+            'roles': roles
+        }
+        
+    except AuthenticationError as e:
+        print(f"❌ Authentication failed: {e}")
+        return None
+    except TokenError as e:
+        print(f"❌ Token generation failed: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Login failed: {e}")
+        return None
+
+
 async def main():
     """Main entry point"""
-    # STEP 1: Require authentication BEFORE agent initialization
+    # STEP 1: Check authentication, prompt for login if needed
+    claims = None
     try:
         claims = require_auth()
     except SessionError as e:
-        print(f"❌ Authentication required: {e}")
-        print("\nPlease login first using:")
-        print("  python cli_login.py\n")
-        exit(1)
+        # Authentication failed, prompt for login
+        claims = perform_login()
+        
+        if not claims:
+            print("\n❌ Authentication failed. Exiting.\n")
+            exit(1)
     
     # STEP 2: Build immutable user context from JWT claims
     user_context = {
