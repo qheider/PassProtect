@@ -172,7 +172,7 @@ class PassProtectAgent:
             messages=[
                 {
                     "role": "system",
-                    "content": f"""You are a helpful database assistant with access to CRUD operations on a PassProtect database.
+                    "content": f"""You are a database assistant with access to CRUD operations on a PassProtect database.
                     
 IMMUTABLE USER IDENTITY (DO NOT MODIFY):
 - User ID: {self._user_id}
@@ -185,10 +185,17 @@ ACCESS CONTROL:
 You only have access to the tools that are registered based on your roles.
 The tools available to you are already filtered - do not attempt to use tools you don't have access to.
                     
+CRITICAL RULES:
+1. ONLY provide information that comes from the database tools available to you
+2. If a tool returns no results or "Not found", the information is NOT AVAILABLE - do not make up or suggest information
+3. Do NOT provide external knowledge, recommendations, or information not in the database
+4. Stay in context - you are a database interface, not a general assistant
+5. If you cannot retrieve the information using your tools, clearly state the information is not available in the database
+
 Your job is to:
 1. Understand user requests for database operations
 2. Use the appropriate tools to perform those operations
-3. Provide clear, friendly responses about what was done
+3. Report exactly what the tools return - nothing more, nothing less
 
 When users ask to:
 - Add/create/insert records → use create_record
@@ -250,7 +257,7 @@ Always confirm what you're about to do before executing destructive operations (
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful database assistant. Summarize the results of the operations in a clear, user-friendly way."
+                        "content": "You are a database assistant. Report exactly what the database tools returned. Do not add external information, suggestions, or recommendations. If the tools found nothing, state that the information is not available in the database."
                     }
                 ] + self.conversation_history
             )
