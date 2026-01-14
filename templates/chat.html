@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - PassProtect{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+    }
+    
+    .chat-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2rem;
+        background: #f5f7fa;
+    }
+    
+    .message {
+        margin-bottom: 1.5rem;
+        animation: fadeIn 0.3s ease-in;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .message-user {
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    .message-assistant {
+        display: flex;
+        justify-content: flex-start;
+    }
+    
+    .message-content {
+        max-width: 70%;
+        padding: 1rem 1.5rem;
+        border-radius: 1rem;
+        word-wrap: break-word;
+    }
+    
+    .message-user .message-content {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-bottom-right-radius: 0.25rem;
+    }
+    
+    .message-assistant .message-content {
+        background: white;
+        color: #333;
+        border: 1px solid #e0e0e0;
+        border-bottom-left-radius: 0.25rem;
+    }
+    
+    .message-label {
+        font-size: 0.75rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.7;
+        font-weight: 600;
+    }
+    
+    .tool-call {
+        background: #e3f2fd;
+        border-left: 3px solid #2196f3;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+    }
+    
+    .tool-call-name {
+        font-weight: 600;
+        color: #1976d2;
+    }
+    
+    .chat-input-area {
+        background: white;
+        padding: 1.5rem 2rem;
+        border-top: 1px solid #e0e0e0;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    }
+    
+    .chat-input-form {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .chat-input {
+        flex: 1;
+        padding: 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        transition: border-color 0.3s;
+    }
+    
+    .chat-input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    .chat-send-btn {
+        padding: 1rem 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-weight: 600;
+        transition: transform 0.2s;
+    }
+    
+    .chat-send-btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    .chat-send-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .loading {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="chat-container">
+    <div class="chat-header">
+        <div>
+            <h2>💬 AI Chat Assistant</h2>
+            <p style="font-size: 0.875rem; opacity: 0.9;">Ask me anything about your database</p>
+        </div>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <span>{{ username }} ({{ roles }})</span>
+            <a href="{{ url_for('dashboard') }}" class="btn" style="background: rgba(255,255,255,0.2);">← Dashboard</a>
+            <a href="{{ url_for('logout') }}" class="btn" style="background: rgba(255,255,255,0.2);">Logout</a>
+        </div>
+    </div>
+    
+    <div class="chat-messages" id="chatMessages">
+        <div class="message message-assistant">
+            <div style="max-width: 70%;">
+                <div class="message-label">🤖 Assistant</div>
+                <div class="message-content">
+                    Hello! I'm your PassProtect database assistant. I can help you:
+                    <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem;">
+                        <li>Create new records</li>
+                        <li>Search and read records</li>
+                        <li>Update existing records</li>
+                        <li>View table schemas</li>
+                        <li>Read passwords for companies</li>
+                    </ul>
+                    <br>
+                    What would you like to do?
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="chat-input-area">
+        <form class="chat-input-form" id="chatForm">
+            <input type="text" 
+                   id="chatInput" 
+                   class="chat-input" 
+                   placeholder="Type your message here..." 
+                   autocomplete="off"
+                   required>
+            <button type="submit" class="chat-send-btn" id="sendBtn">
+                Send
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const chatMessages = document.getElementById('chatMessages');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const conversationHistory = [];
+    
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function addMessage(role, content, toolCalls = []) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${role}`;
+        
+        const contentWrapper = document.createElement('div');
+        contentWrapper.style.maxWidth = '70%';
+        
+        const label = document.createElement('div');
+        label.className = 'message-label';
+        label.textContent = role === 'user' ? '👤 You' : '🤖 Assistant';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        messageContent.textContent = content;
+        
+        contentWrapper.appendChild(label);
+        contentWrapper.appendChild(messageContent);
+        
+        // Add tool calls if any
+        if (toolCalls && toolCalls.length > 0) {
+            toolCalls.forEach(tc => {
+                const toolDiv = document.createElement('div');
+                toolDiv.className = 'tool-call';
+                toolDiv.innerHTML = `<span class="tool-call-name">🔧 ${tc.name}</span><br>` +
+                                  `<code>${JSON.stringify(tc.arguments, null, 2)}</code>`;
+                contentWrapper.appendChild(toolDiv);
+            });
+        }
+        
+        messageDiv.appendChild(contentWrapper);
+        chatMessages.appendChild(messageDiv);
+        scrollToBottom();
+    }
+    
+    function setLoading(isLoading) {
+        sendBtn.disabled = isLoading;
+        chatInput.disabled = isLoading;
+        sendBtn.innerHTML = isLoading ? '<span class="loading"></span>' : 'Send';
+    }
+    
+    chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const message = chatInput.value.trim();
+        if (!message) return;
+        
+        // Add user message to UI
+        addMessage('user', message);
+        conversationHistory.push({ role: 'user', content: message });
+        
+        chatInput.value = '';
+        setLoading(true);
+        
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    history: conversationHistory
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to get response');
+            }
+            
+            const data = await response.json();
+            
+            // Add assistant message to UI
+            addMessage('assistant', data.response, data.tool_calls);
+            conversationHistory.push({ 
+                role: 'assistant', 
+                content: data.response 
+            });
+            
+        } catch (error) {
+            addMessage('assistant', `Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+            chatInput.focus();
+        }
+    });
+    
+    // Focus input on load
+    chatInput.focus();
+</script>
+{% endblock %}
