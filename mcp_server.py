@@ -279,9 +279,9 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             if not company:
                 return [TextContent(type="text", text="Error: Company name is required")]
             
-            # Parameterized query with user_id AND company
+            # Parameterized query with created_by_user_id AND companyName
             # This ensures users can ONLY access their own passwords
-            query = "SELECT id, company, password FROM passprotect WHERE user_id = %s AND company = %s"
+            query = "SELECT id, companyName, companyPassword, companyUserName, note FROM passprotect WHERE created_by_user_id = %s AND companyName = %s"
             results = execute_query(query, (AUTHENTICATED_USER_ID, company), fetch=True)
             
             if not results:

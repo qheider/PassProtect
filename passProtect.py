@@ -48,7 +48,7 @@ class PassProtectAgent:
         
         Role permissions:
         - admin: full CRUD access (all tools)
-        - user: create, read, update
+        - user/generalUser: create, read, update
         - readonly: read only
         
         Returns:
@@ -66,7 +66,7 @@ class PassProtectAgent:
                 'execute_custom_query',
                 'read_password'
             }
-        elif 'user' in self._roles:
+        elif 'user' in self._roles or 'generalUser' in self._roles:
             # Create, read, update only
             return {
                 'create_record',
@@ -326,7 +326,7 @@ async def main():
     
     # STEP 2: Build immutable user context from JWT claims
     user_context = {
-        'user_id': claims['sub'],
+        'user_id': int(claims['sub']),  # Convert string back to int
         'username': claims['username'],
         'roles': claims['roles']
     }

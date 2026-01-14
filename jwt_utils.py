@@ -50,7 +50,7 @@ def create_token(user_id: int, username: str, roles: List[str]) -> str:
     
     # Build token payload
     payload = {
-        'sub': user_id,              # Subject: user ID
+        'sub': str(user_id),         # Subject: user ID (must be string)
         'username': username,         # Username from user.userName
         'roles': roles,              # Array of role names
         'iat': now,                  # Issued at
