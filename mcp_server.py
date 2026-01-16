@@ -291,7 +291,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             record = results[0]
             return [TextContent(
                 type="text",
-                text=f"Password for {record['company']}:\n{json.dumps(record, indent=2, default=str)}"
+                text=f"Password for {record['companyName']}:\n{json.dumps(record, indent=2, default=str)}"
             )]
         
         else:

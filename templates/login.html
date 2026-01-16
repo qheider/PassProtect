@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Login - PassProtect{% endblock %}
+
+{% block body %}
+<div class="login-container">
+    <div class="login-box">
+        <div class="login-header">
+            <h1>🔐 PassProtect</h1>
+            <p>Database Management System</p>
+        </div>
+        
+        {% if error %}
+        <div class="error-message">
+            <strong>❌ Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+        
+        <form method="POST" class="login-form">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" 
+                       id="username" 
+                       name="username" 
+                       required 
+                       autofocus
+                       placeholder="Enter your username">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" 
+                       id="password" 
+                       name="password" 
+                       required
+                       placeholder="Enter your password">
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+        
+        <div class="login-footer">
+            <p>Session expires after 8 hours of inactivity</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

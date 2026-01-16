@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - PassProtect{% endblock %}
+
+{% block body %}
+<div class="dashboard-container">
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <h1>🔐 PassProtect</h1>
+        </div>
+        <div class="navbar-menu">
+            <span class="user-info">
+                <strong>{{ username }}</strong>
+                <span class="user-roles">({{ roles }})</span>
+            </span>
+            <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+        </div>
+    </nav>
+    
+    <div class="dashboard-content">
+        <div class="welcome-section">
+            <h2>Welcome to PassProtect</h2>
+            <p>Secure database management with AI-powered assistance</p>
+        </div>
+        
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-icon">💬</div>
+                <h3>AI Chat Assistant</h3>
+                <p>Interact with your database using natural language queries</p>
+                <a href="{{ url_for('chat') }}" class="btn btn-primary">Open Chat</a>
+            </div>
+            
+            <div class="card">
+                <div class="card-icon">📊</div>
+                <h3>Your Information</h3>
+                <div class="info-list">
+                    <div class="info-item">
+                        <span class="info-label">Username:</span>
+                        <span class="info-value">{{ username }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Roles:</span>
+                        <span class="info-value">{{ roles }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Session:</span>
+                        <span class="info-value">Active (8h)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-icon">🛠️</div>
+                <h3>Available Operations</h3>
+                <ul class="operations-list">
+                    <li>✓ Create new records</li>
+                    <li>✓ Read/search records</li>
+                    <li>✓ Update existing records</li>
+                    {% if 'admin' in roles %}
+                    <li>✓ Delete records</li>
+                    <li>✓ Execute custom queries</li>
+                    {% endif %}
+                    <li>✓ View table schema</li>
+                    <li>✓ Read passwords</li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <div class="card-icon">🔒</div>
+                <h3>Security Features</h3>
+                <ul class="operations-list">
+                    <li>✓ JWT token authentication</li>
+                    <li>✓ Role-based access control</li>
+                    <li>✓ Encrypted passwords</li>
+                    <li>✓ User isolation</li>
+                    <li>✓ Audit logging</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
