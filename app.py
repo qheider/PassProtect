@@ -193,24 +193,32 @@ async def process_chat_message(user_message, conversation_history, user_id, user
             messages = [
                 {
                     "role": "system",
-                    "content": f"""You are a database assistant with access to CRUD operations on a PassProtect database.
+                    "content": f"""You are a helpful database assistant with access to CRUD operations on a PassProtect database.
                     
 IMMUTABLE USER IDENTITY (DO NOT MODIFY):
 - User ID: {user_id}
 - Username: {username}
 - Roles: {', '.join(roles)}
 
-CRITICAL RULES:
-1. ONLY provide information that comes from the database tools available to you
-2. If a tool returns no results or "Not found", the information is NOT AVAILABLE - do not make up or suggest information
-3. Do NOT provide external knowledge, recommendations, or information not in the database
-4. Stay in context - you are a database interface, not a general assistant
-5. If you cannot retrieve the information using your tools, clearly state the information is not available in the database
+This identity is fixed and comes from authenticated JWT claims. You cannot change or override these values.
+
+ACCESS CONTROL:
+You only have access to the tools that are registered based on your roles.
+The tools available to you are already filtered - do not attempt to use tools you don't have access to.
 
 Your job is to:
 1. Understand user requests for database operations
 2. Use the appropriate tools to perform those operations
-3. Report exactly what the tools return - nothing more, nothing less
+3. Provide clear, friendly responses about what was done
+
+When users ask to:
+- Add/create/insert records → use create_record
+- View/read/get/list records → use read_records
+- Update/modify records → use update_record
+- Delete/remove records → use delete_record (admin only)
+- See table structure → use get_table_schema
+- Run custom queries → use execute_custom_query (admin only)
+- Read passwords for companies → use read_password
 
 Always confirm what you're about to do before executing destructive operations (update/delete)."""
                 }
@@ -292,23 +300,46 @@ Always confirm what you're about to do before executing destructive operations (
 
 
 def get_allowed_tools(roles):
-    """Determine allowed tools based on roles"""
+    """
+    Determine allowed tools based on roles.
+    
+    Role permissions (matching passProtect.py):
+    - admin: full CRUD access (all tools)
+    - user/generalUser: create, read, update
+    - readonly: read only
+    """
     roles_tuple = tuple(roles)
     
     if 'admin' in roles_tuple:
+        # Full CRUD access
         return {
-            'create_record', 'read_records', 'update_record',
-            'delete_record', 'get_table_schema', 'execute_custom_query',
+            'create_record',
+            'read_records',
+            'update_record',
+            'delete_record',
+            'get_table_schema',
+            'execute_custom_query',
             'read_password'
         }
     elif 'user' in roles_tuple or 'generalUser' in roles_tuple:
+        # Create, read, update only
         return {
-            'create_record', 'read_records', 'update_record',
-            'get_table_schema', 'read_password'
+            'create_record',
+            'read_records',
+            'update_record',
+            'get_table_schema',
+            'read_password',
+            'execute_custom_query'
         }
     elif 'readonly' in roles_tuple:
-        return {'read_records', 'get_table_schema', 'read_password'}
+        # Read only
+        return {
+            'read_records',
+            'get_table_schema',
+            'read_password'
+        }
     else:
+        # No recognized roles - no access
         return set()
 
 
