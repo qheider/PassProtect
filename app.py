@@ -146,15 +146,27 @@ def api_chat():
         
         return jsonify(response)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Log the full error for debugging
+        import traceback
+        print(f"Error in api_chat: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to process request: {str(e)}'}), 500
 
 
 async def process_chat_message(user_message, conversation_history, user_id, username, roles):
     """Process chat message using MCP tools and OpenAI"""
     
-    # Connect to MCP server
-    python_path = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
-    server_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
+    # Detect if running in Docker or locally
+    is_docker = os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER') == 'true'
+    
+    if is_docker:
+        # In Docker, use system python and absolute path
+        python_path = "python"
+        server_script = "/app/mcp_server.py"
+    else:
+        # Local development with virtual environment
+        python_path = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
+        server_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
     
     server_params = StdioServerParameters(
         command=python_path,
