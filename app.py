@@ -206,19 +206,32 @@ ACCESS CONTROL:
 You only have access to the tools that are registered based on your roles.
 The tools available to you are already filtered - do not attempt to use tools you don't have access to.
 
+CRITICAL DATABASE SCHEMA:
+The passprotect table uses these EXACT column names (case-sensitive):
+- companyName (NOT company_name or company)
+- companyPassword (NOT password)
+- companyUserName (NOT username or user_name)
+- note (optional notes field)
+- created_by_user_id (user ID who owns the record)
+- id (auto-increment primary key)
+
+ALWAYS use these exact column names in camelCase format.
+
 Your job is to:
 1. Understand user requests for database operations
-2. Use the appropriate tools to perform those operations
+2. Use the appropriate tools with CORRECT column names
 3. Provide clear, friendly responses about what was done
 
 When users ask to:
-- Add/create/insert records → use create_record
+- Add/create/insert records → use create_record with correct column names
 - View/read/get/list records → use read_records
-- Update/modify records → use update_record
+- Update/modify records → use update_record with correct column names
 - Delete/remove records → use delete_record (admin only)
 - See table structure → use get_table_schema
 - Run custom queries → use execute_custom_query (admin only)
 - Read passwords for companies → use read_password
+
+When creating records, ALWAYS use created_by_user_id={user_id} automatically.
 
 Always confirm what you're about to do before executing destructive operations (update/delete)."""
                 }
@@ -287,9 +300,26 @@ Always confirm what you're about to do before executing destructive operations (
                 
                 final_message = final_completion.choices[0].message.content
                 
+                # Extract password data if read_password was called
+                password_data = None
+                for tool_call, result in zip(tool_calls_info, tool_results):
+                    if tool_call['name'] == 'read_password':
+                        # Parse the JSON response from tool result
+                        try:
+                            result_text = result['content']
+                            if 'Password for' in result_text and '{' in result_text:
+                                # Extract JSON from result
+                                json_start = result_text.index('{')
+                                json_end = result_text.rindex('}') + 1
+                                json_str = result_text[json_start:json_end]
+                                password_data = json.loads(json_str)
+                        except Exception:
+                            pass  # If parsing fails, just use text response
+                
                 return {
                     'response': final_message,
-                    'tool_calls': tool_calls_info
+                    'tool_calls': tool_calls_info,
+                    'password_data': password_data
                 }
             else:
                 # Direct response
