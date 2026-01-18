@@ -106,13 +106,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="read_records",
-            description="Read records from the passprotect table. Can filter by conditions and limit results.",
+            description="Read/list multiple records from the passprotect table for browsing or filtering by specific criteria. **DO NOT use this to retrieve passwords by company name - use read_password instead.** Use read_records only for: listing all passwords, filtering by specific field values (id, created_by_user_id), or browsing multiple records.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "conditions": {
                         "type": "object",
-                        "description": "Filter conditions as key-value pairs (e.g., {'id': 1, 'username': 'john'})",
+                        "description": "Filter conditions as key-value pairs (e.g., {'id': 1, 'created_by_user_id': 5})",
                         "default": {}
                     },
                     "limit": {
@@ -179,13 +179,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="read_password",
-            description="Read a password for a specific company. Only returns passwords belonging to the authenticated user. User identity is automatically enforced.",
+            description="**PRIMARY TOOL for retrieving passwords by company name.** Use this when user asks for password, credentials, login info for any company/service. Supports case-insensitive and partial matching. Only returns passwords belonging to the authenticated user. Example queries: 'get password for Gmail', 'show me Netflix password', 'what's my GitHub login'.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "company": {
                         "type": "string",
-                        "description": "The company name to retrieve the password for"
+                        "description": "The company/service name to retrieve the password for (case-insensitive, partial match supported)"
                     }
                 },
                 "required": ["company"]
@@ -307,19 +307,32 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 return [TextContent(type="text", text="Error: Company name is required")]
             
             # Parameterized query with created_by_user_id AND companyName
+            # Use LOWER() for case-insensitive comparison
             # This ensures users can ONLY access their own passwords
-            query = "SELECT id, companyName, companyPassword, companyUserName, note FROM passprotect WHERE created_by_user_id = %s AND companyName = %s"
+            query = "SELECT id, companyName, companyPassword, companyUserName, note FROM passprotect WHERE created_by_user_id = %s AND LOWER(companyName) = LOWER(%s) AND archived = 0"
             results = execute_query(query, (AUTHENTICATED_USER_ID, company), fetch=True)
             
             if not results:
-                return [TextContent(type="text", text=f"Not found: No password for company '{company}'")]
+                # Try partial match as fallback
+                query_partial = "SELECT id, companyName, companyPassword, companyUserName, note FROM passprotect WHERE created_by_user_id = %s AND LOWER(companyName) LIKE LOWER(%s) AND archived = 0"
+                results = execute_query(query_partial, (AUTHENTICATED_USER_ID, f"%{company}%"), fetch=True)
+                
+                if not results:
+                    return [TextContent(type="text", text=f"Not found: No password for company '{company}'")]
             
-            # Return the password record
-            record = results[0]
-            return [TextContent(
-                type="text",
-                text=f"Password for {record['companyName']}:\n{json.dumps(record, indent=2, default=str)}"
-            )]
+            # Return the password record (or multiple if found)
+            if len(results) == 1:
+                record = results[0]
+                return [TextContent(
+                    type="text",
+                    text=f"Password for {record['companyName']}:\n{json.dumps(record, indent=2, default=str)}"
+                )]
+            else:
+                # Multiple matches found
+                return [TextContent(
+                    type="text",
+                    text=f"Found {len(results)} matching passwords:\n{json.dumps(results, indent=2, default=str)}"
+                )]
         
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
