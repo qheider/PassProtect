@@ -146,15 +146,27 @@ def api_chat():
         
         return jsonify(response)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Log the full error for debugging
+        import traceback
+        print(f"Error in api_chat: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to process request: {str(e)}'}), 500
 
 
 async def process_chat_message(user_message, conversation_history, user_id, username, roles):
     """Process chat message using MCP tools and OpenAI"""
     
-    # Connect to MCP server
-    python_path = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
-    server_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
+    # Detect if running in Docker or locally
+    is_docker = os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER') == 'true'
+    
+    if is_docker:
+        # In Docker, use system python and absolute path
+        python_path = "python"
+        server_script = "/app/mcp_server.py"
+    else:
+        # Local development with virtual environment
+        python_path = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
+        server_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
     
     server_params = StdioServerParameters(
         command=python_path,
@@ -202,34 +214,39 @@ IMMUTABLE USER IDENTITY (DO NOT MODIFY):
 
 This identity is fixed and comes from authenticated JWT claims. You cannot change or override these values.
 
-ACCESS CONTROL:
-You only have access to the tools that are registered based on your roles.
-The tools available to you are already filtered - do not attempt to use tools you don't have access to.
+CRITICAL INSTRUCTIONS:
+1. ALWAYS use the available tools to search the database when users ask for information
+2. When searching for records, use the read_records tool with appropriate conditions
+3. If a tool returns empty results or "Not found", report that clearly: "No records found for [search term]"
+4. NEVER claim you "don't have access" or "cannot access" - you have tools, use them!
+5. NEVER refuse to search - always try the tool first, then report the actual results
 
-CRITICAL DATABASE SCHEMA:
-The passprotect table uses these EXACT column names (case-sensitive):
-- companyName (NOT company_name or company)
-- companyPassword (NOT password)
-- companyUserName (NOT username or user_name)
-- note (optional notes field)
-- created_by_user_id (user ID who owns the record)
-- id (auto-increment primary key)
-
-ALWAYS use these exact column names in camelCase format.
-
-Your job is to:
-1. Understand user requests for database operations
-2. Use the appropriate tools with CORRECT column names
-3. Provide clear, friendly responses about what was done
-
-When users ask to:
-- Add/create/insert records → use create_record with correct column names
-- View/read/get/list records → use read_records
-- Update/modify records → use update_record with correct column names
+AVAILABLE TOOLS AND WHEN TO USE THEM:
+- Search/find/read/get password for company → ALWAYS use read_records with company name in conditions
+- List all records → use read_records with no conditions
+- Add/create/insert records → use create_record
+- Update/modify records → use update_record
 - Delete/remove records → use delete_record (admin only)
 - See table structure → use get_table_schema
 - Run custom queries → use execute_custom_query (admin only)
-- Read passwords for companies → use read_password
+- read_password tool → ONLY use when you already know the exact company name from a previous search
+
+IMPORTANT: 
+- For ANY password/record search request, use read_records first (not read_password)
+- read_records allows flexible matching and returns all matching records
+- read_password requires exact company name match and may miss records
+
+EXAMPLES:
+- User: "What is the password for mysql" → Use read_records with conditions: {{"company": "mysql"}}
+- User: "Find Remote Home server password" → Use read_records with conditions: {{"companyName": "Remote Home server"}}
+- User: "Show all records" → Use read_records with no conditions
+- User: "Get password for company X" → Use read_records with conditions: {{"companyName": "X"}}
+
+RESPONSE RULES:
+- If tool returns data: Show the results clearly including all fields
+- If tool returns empty/not found: Say "No records found for [company name]"
+- NEVER make up data or provide information not from the tools
+- Be consistent - always use read_records for searching
 
 When creating records, ALWAYS use created_by_user_id={user_id} automatically.
 
