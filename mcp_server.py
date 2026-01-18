@@ -69,36 +69,13 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="create_record",
-            description="Create a new record in the passprotect table. Use EXACT column names: 'companyName', 'companyPassword', 'companyUserName', 'note', 'created_by_user_id'.",
+            description="Create a new record in the passprotect table. Provide field names and values as JSON.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "data": {
                         "type": "object",
-                        "description": "Field names and values. REQUIRED EXACT column names: 'companyName' (company name), 'companyPassword' (password), 'companyUserName' (username/email), 'note' (optional notes), 'created_by_user_id' (user ID who created it). Example: {'companyName': 'Google', 'companyPassword': 'secret123', 'companyUserName': 'john@example.com', 'note': 'My account', 'created_by_user_id': 5}",
-                        "properties": {
-                            "companyName": {
-                                "type": "string",
-                                "description": "The company/service name"
-                            },
-                            "companyPassword": {
-                                "type": "string",
-                                "description": "The password for this account"
-                            },
-                            "companyUserName": {
-                                "type": "string",
-                                "description": "The username or email for this account"
-                            },
-                            "note": {
-                                "type": "string",
-                                "description": "Optional notes about this account"
-                            },
-                            "created_by_user_id": {
-                                "type": "integer",
-                                "description": "The user ID who created this record"
-                            }
-                        },
-                        "required": ["companyName", "companyPassword", "created_by_user_id"]
+                        "description": "Field names and values to insert (e.g., {'username': 'john', 'password': 'secret123'})"
                     }
                 },
                 "required": ["data"]
@@ -125,17 +102,17 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="update_record",
-            description="Update existing record(s) in the passprotect table. Use EXACT column names: 'companyName', 'companyPassword', 'companyUserName', 'note'.",
+            description="Update existing record(s) in the passprotect table based on conditions.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "data": {
                         "type": "object",
-                        "description": "Fields to update. Use EXACT column names: 'companyName', 'companyPassword', 'companyUserName', 'note'. Example: {'companyPassword': 'newpass123', 'note': 'Updated password'}"
+                        "description": "Fields to update with new values (e.g., {'password': 'newpass123'})"
                     },
                     "conditions": {
                         "type": "object",
-                        "description": "Conditions to match records. Common columns: 'id', 'companyName', 'created_by_user_id'. Example: {'id': 1} or {'companyName': 'Google', 'created_by_user_id': 5}"
+                        "description": "Conditions to match records (e.g., {'id': 1})"
                     }
                 },
                 "required": ["data", "conditions"]
@@ -203,10 +180,6 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             data = arguments.get("data", {})
             if not data:
                 return [TextContent(type="text", text="Error: No data provided")]
-            
-            # Add default value for 'archived' field if not provided
-            if 'archived' not in data:
-                data['archived'] = 0
             
             columns = ", ".join(data.keys())
             placeholders = ", ".join(["%s"] * len(data))

@@ -248,8 +248,6 @@ RESPONSE RULES:
 - NEVER make up data or provide information not from the tools
 - Be consistent - always use read_records for searching
 
-When creating records, ALWAYS use created_by_user_id={user_id} automatically.
-
 Always confirm what you're about to do before executing destructive operations (update/delete)."""
                 }
             ]
@@ -317,26 +315,9 @@ Always confirm what you're about to do before executing destructive operations (
                 
                 final_message = final_completion.choices[0].message.content
                 
-                # Extract password data if read_password was called
-                password_data = None
-                for tool_call, result in zip(tool_calls_info, tool_results):
-                    if tool_call['name'] == 'read_password':
-                        # Parse the JSON response from tool result
-                        try:
-                            result_text = result['content']
-                            if 'Password for' in result_text and '{' in result_text:
-                                # Extract JSON from result
-                                json_start = result_text.index('{')
-                                json_end = result_text.rindex('}') + 1
-                                json_str = result_text[json_start:json_end]
-                                password_data = json.loads(json_str)
-                        except Exception:
-                            pass  # If parsing fails, just use text response
-                
                 return {
                     'response': final_message,
-                    'tool_calls': tool_calls_info,
-                    'password_data': password_data
+                    'tool_calls': tool_calls_info
                 }
             else:
                 # Direct response
