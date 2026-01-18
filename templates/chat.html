@@ -148,91 +148,6 @@
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
-    
-    /* Password Card Styles */
-    .password-card {
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        margin-top: 1rem;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-    
-    .password-card-header {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-        padding-bottom: 0.75rem;
-        border-bottom: 2px solid #f0f0f0;
-    }
-    
-    .password-card-header h4 {
-        margin: 0;
-        color: #667eea;
-        font-size: 1.1rem;
-    }
-    
-    .password-field {
-        margin-bottom: 1rem;
-        padding: 0.75rem;
-        background: #f8f9fa;
-        border-radius: 0.5rem;
-    }
-    
-    .password-field-label {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #666;
-        font-weight: 600;
-        margin-bottom: 0.25rem;
-    }
-    
-    .password-field-value {
-        font-size: 1rem;
-        color: #333;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
-    .password-hidden {
-        color: #999;
-        letter-spacing: 2px;
-    }
-    
-    .copy-btn, .toggle-password-btn {
-        background: #667eea;
-        color: white;
-        border: none;
-        padding: 0.4rem 0.8rem;
-        border-radius: 0.375rem;
-        cursor: pointer;
-        font-size: 0.875rem;
-        transition: all 0.2s;
-    }
-    
-    .copy-btn:hover, .toggle-password-btn:hover {
-        background: #5568d3;
-        transform: translateY(-1px);
-    }
-    
-    .copy-btn:active, .toggle-password-btn:active {
-        transform: translateY(0);
-    }
-    
-    .copy-btn.copied {
-        background: #4caf50;
-    }
-    
-    .btn-group {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 1rem;
-    }
 </style>
 {% endblock %}
 
@@ -296,7 +211,7 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
     
-    function addMessage(role, content, toolCalls = [], passwordData = null) {
+    function addMessage(role, content, toolCalls = []) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message message-${role}`;
         
@@ -309,13 +224,7 @@
         
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
-        
-        // Check if this is a password response
-        if (passwordData) {
-            messageContent.innerHTML = renderPasswordCard(passwordData);
-        } else {
-            messageContent.textContent = content;
-        }
+        messageContent.textContent = content;
         
         contentWrapper.appendChild(label);
         contentWrapper.appendChild(messageContent);
@@ -334,91 +243,6 @@
         messageDiv.appendChild(contentWrapper);
         chatMessages.appendChild(messageDiv);
         scrollToBottom();
-    }
-    
-    function renderPasswordCard(data) {
-        const cardId = 'pwd-' + Date.now();
-        return `
-            <div class="password-card">
-                <div class="password-card-header">
-                    <span style="font-size: 1.5rem;">🔐</span>
-                    <h4>${escapeHtml(data.companyName)}</h4>
-                </div>
-                
-                ${data.companyUserName ? `
-                <div class="password-field">
-                    <div class="password-field-label">Username / Email</div>
-                    <div class="password-field-value">
-                        <span>${escapeHtml(data.companyUserName)}</span>
-                        <button class="copy-btn" onclick="copyToClipboard('${escapeHtml(data.companyUserName)}', this)">📋 Copy</button>
-                    </div>
-                </div>
-                ` : ''}
-                
-                <div class="password-field">
-                    <div class="password-field-label">Password</div>
-                    <div class="password-field-value">
-                        <span id="${cardId}-pwd" class="password-hidden">••••••••••••</span>
-                        <span id="${cardId}-pwd-show" style="display: none;">${escapeHtml(data.companyPassword)}</span>
-                    </div>
-                </div>
-                
-                <div class="btn-group">
-                    <button class="toggle-password-btn" onclick="togglePassword('${cardId}')">👁️ Show</button>
-                    <button class="copy-btn" onclick="copyPassword('${escapeHtml(data.companyPassword)}', this)">📋 Copy Password</button>
-                </div>
-                
-                ${data.note ? `
-                <div class="password-field" style="margin-top: 1rem; background: #fff8e1;">
-                    <div class="password-field-label">📝 Note</div>
-                    <div class="password-field-value">
-                        <span style="font-style: italic;">${escapeHtml(data.note)}</span>
-                    </div>
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    function togglePassword(cardId) {
-        const hiddenElem = document.getElementById(cardId + '-pwd');
-        const shownElem = document.getElementById(cardId + '-pwd-show');
-        const btn = event.target;
-        
-        if (hiddenElem.style.display === 'none') {
-            hiddenElem.style.display = 'inline';
-            shownElem.style.display = 'none';
-            btn.textContent = '👁️ Show';
-        } else {
-            hiddenElem.style.display = 'none';
-            shownElem.style.display = 'inline';
-            btn.textContent = '🙈 Hide';
-        }
-    }
-    
-    function copyToClipboard(text, btn) {
-        navigator.clipboard.writeText(text).then(() => {
-            const originalText = btn.textContent;
-            btn.textContent = '✓ Copied!';
-            btn.classList.add('copied');
-            setTimeout(() => {
-                btn.textContent = originalText;
-                btn.classList.remove('copied');
-            }, 2000);
-        }).catch(err => {
-            alert('Failed to copy');
-        });
-    }
-    
-    function copyPassword(password, btn) {
-        copyToClipboard(password, btn);
     }
     
     function setLoading(isLoading) {
@@ -458,14 +282,8 @@
             
             const data = await response.json();
             
-            // Check if response contains password data
-            let passwordData = null;
-            if (data.password_data) {
-                passwordData = data.password_data;
-            }
-            
             // Add assistant message to UI
-            addMessage('assistant', data.response, data.tool_calls, passwordData);
+            addMessage('assistant', data.response, data.tool_calls);
             conversationHistory.push({ 
                 role: 'assistant', 
                 content: data.response 
