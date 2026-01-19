@@ -181,6 +181,10 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             if not data:
                 return [TextContent(type="text", text="Error: No data provided")]
             
+            # Add default value for 'archived' field if not provided
+            if 'archived' not in data:
+                data['archived'] = 0
+            
             columns = ", ".join(data.keys())
             placeholders = ", ".join(["%s"] * len(data))
             query = f"INSERT INTO passprotect ({columns}) VALUES ({placeholders})"

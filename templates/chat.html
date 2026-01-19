@@ -233,6 +233,172 @@
         gap: 0.5rem;
         margin-top: 1rem;
     }
+    
+    /* Modal Styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        animation: fadeIn 0.2s;
+    }
+    
+    .modal-overlay.active {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .modal-dialog {
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        animation: slideIn 0.3s;
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .modal-header h3 {
+        margin: 0;
+        color: #667eea;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #999;
+        transition: color 0.2s;
+    }
+    
+    .modal-close:hover {
+        color: #333;
+    }
+    
+    .form-field {
+        margin-bottom: 1.25rem;
+    }
+    
+    .form-field label {
+        display: block;
+        font-weight: 600;
+        color: #444;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .form-field input,
+    .form-field textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        font-family: inherit;
+        transition: border-color 0.3s;
+    }
+    
+    .form-field input:focus,
+    .form-field textarea:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    .form-field textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+    
+    .form-field small {
+        display: block;
+        margin-top: 0.25rem;
+        color: #666;
+        font-size: 0.85rem;
+    }
+    
+    .modal-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        flex: 1;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+        background: #e0e0e0;
+        color: #666;
+    }
+    
+    .btn-secondary:hover {
+        background: #d0d0d0;
+    }
+    
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .new-record-btn {
+        position: fixed;
+        bottom: 100px;
+        right: 2rem;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        font-size: 2rem;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s;
+        z-index: 100;
+    }
+    
+    .new-record-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
 </style>
 {% endblock %}
 
@@ -267,6 +433,105 @@
                     What would you like to do?
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <!-- Floating Action Button -->
+    <button class="new-record-btn" onclick="openNewRecordModal()" title="Add New Password">
+        +
+    </button>
+    
+    <!-- Modal for New Record -->
+    <div class="modal-overlay" id="newRecordModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>
+                    <span>🔐</span>
+                    <span>Add New Password</span>
+                </h3>
+                <button class="modal-close" onclick="closeNewRecordModal()">&times;</button>
+            </div>
+            
+            <form id="newRecordForm" onsubmit="submitNewRecord(event)">
+                <div class="form-field">
+                    <label for="companyName">Company/Service Name *</label>
+                    <input type="text" id="companyName" name="companyName" required 
+                           placeholder="e.g., Gmail, Netflix, GitHub">
+                </div>
+                
+                <div class="form-field">
+                    <label for="companyUserName">Username / Email</label>
+                    <input type="text" id="companyUserName" name="companyUserName" 
+                           placeholder="e.g., john@example.com">
+                    <small>Optional: Your username or email for this service</small>
+                </div>
+                
+                <div class="form-field">
+                    <label for="companyPassword">Password *</label>
+                    <input type="password" id="companyPassword" name="companyPassword" required 
+                           placeholder="Enter password">
+                </div>
+                
+                <div class="form-field">
+                    <label for="note">Note</label>
+                    <textarea id="note" name="note" 
+                              placeholder="Optional: Any additional notes or comments"></textarea>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeNewRecordModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitRecordBtn">Save Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal for Update Record -->
+    <div class="modal-overlay" id="updateRecordModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>
+                    <span>✏️</span>
+                    <span>Update Password</span>
+                </h3>
+                <button class="modal-close" onclick="closeUpdateRecordModal()">&times;</button>
+            </div>
+            
+            <form id="updateRecordForm" onsubmit="submitUpdateRecord(event)">
+                <input type="hidden" id="updateRecordId" name="recordId">
+                <input type="hidden" id="updateCompanyNameHidden" name="companyNameForUpdate">
+                
+                <div class="form-field">
+                    <label for="updateCompanyName">Company/Service Name</label>
+                    <input type="text" id="updateCompanyName" name="companyNameDisplay" readonly 
+                           style="background: #f5f5f5; cursor: not-allowed;">
+                    <small>Company name cannot be changed</small>
+                </div>
+                
+                <div class="form-field">
+                    <label for="updateCompanyUserName">Username / Email</label>
+                    <input type="text" id="updateCompanyUserName" name="companyUserName" 
+                           placeholder="e.g., john@example.com">
+                </div>
+                
+                <div class="form-field">
+                    <label for="updateCompanyPassword">Password</label>
+                    <input type="password" id="updateCompanyPassword" name="companyPassword" 
+                           placeholder="Enter new password (leave blank to keep current)">
+                    <small>Leave blank if you don't want to change the password</small>
+                </div>
+                
+                <div class="form-field">
+                    <label for="updateNote">Note</label>
+                    <textarea id="updateNote" name="note" 
+                              placeholder="Optional: Any additional notes or comments"></textarea>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeUpdateRecordModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitUpdateBtn">Update Password</button>
+                </div>
+            </form>
         </div>
     </div>
     
@@ -471,11 +736,219 @@
                 content: data.response 
             });
             
+            // Check if we should show the new record form
+            if (data.show_form) {
+                // Small delay so user can see the message first
+                setTimeout(() => {
+                    openNewRecordModal();
+                }, 500);
+            }
+            
+            // Check if we should show the update record form
+            if (data.show_update_form && data.record_data) {
+                // Small delay so user can see the message first
+                setTimeout(() => {
+                    openUpdateRecordModal(data.record_data);
+                }, 500);
+            }
+            
         } catch (error) {
             addMessage('assistant', `Error: ${error.message}`);
         } finally {
             setLoading(false);
             chatInput.focus();
+        }
+    });
+    
+    
+    function openUpdateRecordModal(recordData) {
+        document.getElementById('updateRecordModal').classList.add('active');
+        
+        // Pre-fill the form with existing data
+        if (recordData) {
+            document.getElementById('updateRecordId').value = recordData.id || '';
+            document.getElementById('updateCompanyName').value = recordData.companyName || '';
+            document.getElementById('updateCompanyNameHidden').value = recordData.companyName || '';
+            document.getElementById('updateCompanyUserName').value = recordData.companyUserName || '';
+            document.getElementById('updateNote').value = recordData.note || '';
+            // Don't pre-fill password for security
+            document.getElementById('updateCompanyPassword').value = '';
+        }
+        
+        document.getElementById('updateCompanyUserName').focus();
+    }
+    
+    function closeUpdateRecordModal() {
+        document.getElementById('updateRecordModal').classList.remove('active');
+        document.getElementById('updateRecordForm').reset();
+    }
+    
+    async function submitUpdateRecord(event) {
+        event.preventDefault();
+        
+        const submitBtn = document.getElementById('submitUpdateBtn');
+        const formData = new FormData(event.target);
+        
+        const recordId = formData.get('recordId');
+        const companyName = formData.get('companyNameForUpdate');
+        const newPassword = formData.get('companyPassword');
+        const newUserName = formData.get('companyUserName');
+        const newNote = formData.get('note');
+        
+        // Build update message
+        let updates = [];
+        if (newPassword) updates.push(`- Password: ${newPassword}`);
+        if (newUserName) updates.push(`- Username: ${newUserName}`);
+        if (newNote !== null) updates.push(`- Note: ${newNote}`);
+        
+        if (updates.length === 0) {
+            alert('No changes to update. Please modify at least one field.');
+            return;
+        }
+        
+        const message = `Update the password record for company "${companyName}" (ID: ${recordId}) with the following changes:
+${updates.join('\n')}`;
+        
+        // Disable submit button
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Updating...';
+        
+        try {
+            // Close modal
+            closeUpdateRecordModal();
+            
+            // Add user message to UI
+            addMessage('user', message);
+            conversationHistory.push({ role: 'user', content: message });
+            
+            setLoading(true);
+            
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    history: conversationHistory
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update record');
+            }
+            
+            const responseData = await response.json();
+            
+            // Check if response contains password data
+            let passwordData = null;
+            if (responseData.password_data) {
+                passwordData = responseData.password_data;
+            }
+            
+            // Add assistant message to UI
+            addMessage('assistant', responseData.response, responseData.tool_calls, passwordData);
+            conversationHistory.push({ 
+                role: 'assistant', 
+                content: responseData.response 
+            });
+            
+        } catch (error) {
+            addMessage('assistant', `Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Update Password';
+        }
+    }
+    
+    function openNewRecordModal() {
+        document.getElementById('newRecordModal').classList.add('active');
+        document.getElementById('companyName').focus();
+    }
+    
+    function closeNewRecordModal() {
+        document.getElementById('newRecordModal').classList.remove('active');
+        document.getElementById('newRecordForm').reset();
+    }
+    
+    async function submitNewRecord(event) {
+        event.preventDefault();
+        
+        const submitBtn = document.getElementById('submitRecordBtn');
+        const formData = new FormData(event.target);
+        
+        const data = {
+            companyName: formData.get('companyName'),
+            companyPassword: formData.get('companyPassword'),
+            companyUserName: formData.get('companyUserName') || null,
+            note: formData.get('note') || null
+        };
+        
+        // Disable submit button
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+        
+        try {
+            // Send as chat message to use the AI agent
+            const message = `Create a new password record with the following details:
+- Company Name: ${data.companyName}
+- Password: ${data.companyPassword}
+${data.companyUserName ? `- Username: ${data.companyUserName}` : ''}
+${data.note ? `- Note: ${data.note}` : ''}`;
+            
+            // Close modal
+            closeNewRecordModal();
+            
+            // Add user message to UI
+            addMessage('user', message);
+            conversationHistory.push({ role: 'user', content: message });
+            
+            setLoading(true);
+            
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    history: conversationHistory
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to create record');
+            }
+            
+            const responseData = await response.json();
+            
+            // Check if response contains password data
+            let passwordData = null;
+            if (responseData.password_data) {
+                passwordData = responseData.password_data;
+            }
+            
+            // Add assistant message to UI
+            addMessage('assistant', responseData.response, responseData.tool_calls, passwordData);
+            conversationHistory.push({ 
+                role: 'assistant', 
+                content: responseData.response 
+            });
+            
+        } catch (error) {
+            addMessage('assistant', `Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Password';
+        }
+    }
+    
+    // Close modal when clicking outside
+    document.getElementById('newRecordModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeNewRecordModal();
         }
     });
     
