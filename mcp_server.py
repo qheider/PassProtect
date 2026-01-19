@@ -83,13 +83,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="read_records",
-            description="Read/list multiple records from the passprotect table for browsing or filtering by specific criteria. **DO NOT use this to retrieve passwords by company name - use read_password instead.** Use read_records only for: listing all passwords, filtering by specific field values (id, created_by_user_id), or browsing multiple records.",
+            description="Read/list multiple records from the passprotect table belonging to the authenticated user. **DO NOT use this to retrieve passwords by company name - use read_password instead.** Use read_records only for: listing all user's passwords, filtering by specific field values (id, etc.), or browsing multiple records. Automatically filters by authenticated user - only returns records created by the current user.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "conditions": {
                         "type": "object",
-                        "description": "Filter conditions as key-value pairs (e.g., {'id': 1, 'created_by_user_id': 5})",
+                        "description": "Additional filter conditions as key-value pairs (e.g., {'id': 1}). The user ID filter is automatically applied.",
                         "default": {}
                     },
                     "limit": {
@@ -196,26 +196,38 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             )]
         
         elif name == "read_records":
+            # Security: Ensure user can only read their own records
+            if not AUTHENTICATED_USER_ID:
+                return [TextContent(type="text", text="Error: User authentication context not found")]
+            
             conditions = arguments.get("conditions", {})
             limit = arguments.get("limit", 100)
             
-            query = "SELECT * FROM passprotect"
-            params = []
+            query = "SELECT * FROM passprotect WHERE created_by_user_id = %s"
+            params = [AUTHENTICATED_USER_ID]
             
             if conditions:
                 where_clauses = [f"{key} = %s" for key in conditions.keys()]
-                query += " WHERE " + " AND ".join(where_clauses)
-                params = list(conditions.values())
+                query += " AND " + " AND ".join(where_clauses)
+                params.extend(list(conditions.values()))
             
             query += f" LIMIT {limit}"
             
             results = execute_query(query, tuple(params), fetch=True)
+            
+            if not results:
+                return [TextContent(type="text", text="No records found. You don't have any saved passwords yet.")]
+            
             return [TextContent(
                 type="text",
                 text=f"Found {len(results)} record(s):\n{json.dumps(results, indent=2, default=str)}"
             )]
         
         elif name == "update_record":
+            # Security: Ensure user can only update their own records
+            if not AUTHENTICATED_USER_ID:
+                return [TextContent(type="text", text="Error: User authentication context not found")]
+            
             data = arguments.get("data", {})
             conditions = arguments.get("conditions", {})
             
@@ -227,25 +239,41 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             set_clauses = [f"{key} = %s" for key in data.keys()]
             where_clauses = [f"{key} = %s" for key in conditions.keys()]
             
-            query = f"UPDATE passprotect SET {', '.join(set_clauses)} WHERE {' AND '.join(where_clauses)}"
-            params = list(data.values()) + list(conditions.values())
+            # Add user ID constraint to prevent updating other users' records
+            query = f"UPDATE passprotect SET {', '.join(set_clauses)} WHERE created_by_user_id = %s AND {' AND '.join(where_clauses)}"
+            params = list(data.values()) + [AUTHENTICATED_USER_ID] + list(conditions.values())
             
             result = execute_query(query, tuple(params))
+            
+            if result['affected_rows'] == 0:
+                return [TextContent(type="text", text="No records were updated. The record may not exist or you don't have permission to update it.")]
+            
             return [TextContent(
                 type="text",
                 text=f"Update successful. Affected rows: {result['affected_rows']}"
             )]
         
         elif name == "delete_record":
+            # Security: Ensure user can only delete their own records
+            if not AUTHENTICATED_USER_ID:
+                return [TextContent(type="text", text="Error: User authentication context not found")]
+            
             conditions = arguments.get("conditions", {})
             
             if not conditions:
                 return [TextContent(type="text", text="Error: No conditions provided. Delete requires conditions to prevent accidental full table deletion.")]
             
             where_clauses = [f"{key} = %s" for key in conditions.keys()]
-            query = f"DELETE FROM passprotect WHERE {' AND '.join(where_clauses)}"
             
-            result = execute_query(query, tuple(conditions.values()))
+            # Add user ID constraint to prevent deleting other users' records
+            query = f"DELETE FROM passprotect WHERE created_by_user_id = %s AND {' AND '.join(where_clauses)}"
+            params = [AUTHENTICATED_USER_ID] + list(conditions.values())
+            
+            result = execute_query(query, tuple(params))
+            
+            if result['affected_rows'] == 0:
+                return [TextContent(type="text", text="No records were deleted. The record may not exist or you don't have permission to delete it.")]
+            
             return [TextContent(
                 type="text",
                 text=f"Delete successful. Affected rows: {result['affected_rows']}"

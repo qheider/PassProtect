@@ -141,3 +141,56 @@ def execute(sql: str, params: Optional[Tuple] = None) -> Dict[str, Any]:
         if connection and connection.is_connected():
             cursor.close()
             connection.close()
+
+
+def register_new_user(username: str, email: str, password: str) -> int:
+    """
+    Register a new user in the database.
+    
+    Args:
+        username: Username for the new user
+        email: Email address for the new user
+        password: Plain text password (will be hashed)
+        
+    Returns:
+        The user ID of the newly created user
+        
+    Raises:
+        Exception: If username or email already exists, or if registration fails
+    """
+    import bcrypt
+    from datetime import datetime
+    
+    # Check if username already exists
+    existing_user = fetch_one("SELECT id FROM user WHERE userName = %s", (username,))
+    if existing_user:
+        raise Exception(f"Username '{username}' is already taken")
+    
+    # Check if email already exists
+    existing_email = fetch_one("SELECT id FROM user WHERE email = %s", (email,))
+    if existing_email:
+        raise Exception(f"Email '{email}' is already registered")
+    
+    # Hash the password
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    # Insert new user
+    sql = """
+        INSERT INTO user (userName, email, password, enabled, archived, date_created, date_updated, created_by_user_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    
+    now = datetime.now()
+    params = (username, email, password_hash, 1, 0, now, now, None)
+    
+    result = execute(sql, params)
+    user_id = result['last_insert_id']
+    
+    # Assign default role (generalUser with id=5)
+    role_sql = """
+        INSERT INTO users_roles (users_ID, roles_ID)
+        VALUES (%s, %s)
+    """
+    execute(role_sql, (user_id, 5))
+    
+    return user_id

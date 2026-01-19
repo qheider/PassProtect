@@ -99,6 +99,38 @@ def login():
     return render_template('login.html')
 
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """User registration page"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        # Validation
+        if not username or not email or not password:
+            return render_template('register.html', error='All fields are required')
+        
+        if password != confirm_password:
+            return render_template('register.html', error='Passwords do not match')
+        
+        if len(password) < 8:
+            return render_template('register.html', error='Password must be at least 8 characters long')
+        
+        try:
+            # Register user
+            from db_access import register_new_user
+            user_id = register_new_user(username, email, password)
+            
+            return render_template('register.html', success=f'Registration successful! You can now login with username: {username}')
+            
+        except Exception as e:
+            return render_template('register.html', error=str(e))
+    
+    return render_template('register.html')
+
+
 @app.route('/logout')
 def logout():
     """Logout and clear session"""
