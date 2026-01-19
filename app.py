@@ -142,9 +142,13 @@ def logout():
 @login_required
 def dashboard():
     """Main dashboard page"""
+    # Fetch recent searches
+    recent_searches = asyncio.run(fetch_recent_searches(request.user_id, limit=5))
+    
     return render_template('dashboard.html', 
                          username=request.username,
-                         roles=', '.join(request.roles))
+                         roles=', '.join(request.roles),
+                         recent_searches=recent_searches)
 
 
 @app.route('/chat')
@@ -215,11 +219,46 @@ async def fetch_record_for_update(user_id, company_name):
                     json_end = result_text.rindex('}') + 1
                     json_str = result_text[json_start:json_end]
                     return json.loads(json_str)
-                
                 return None
     except Exception as e:
-        print(f"Error fetching record for update: {e}")
+        print(f"Error fetching record: {e}")
         return None
+
+
+async def fetch_recent_searches(user_id, limit=10):
+    """Fetch recent search history from MCP"""
+    try:
+        python_path = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
+        server_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
+        
+        server_params = StdioServerParameters(
+            command=python_path,
+            args=[server_script],
+            env={
+                "DB_HOST": os.getenv("DB_HOST", "localhost"),
+                "DB_USER": os.getenv("DB_USER", "root"),
+                "DB_PASSWORD": os.getenv("DB_PASSWORD", ""),
+                "DB_NAME": os.getenv("DB_NAME", "quaziinfodb"),
+                "USER_ID": str(user_id)
+            }
+        )
+        
+        async with stdio_client(server_params) as (stdio, write):
+            async with ClientSession(stdio, write) as session:
+                await session.initialize()
+                result = await session.call_tool("get_recent_searches", {"limit": limit})
+                result_text = "\n".join([content.text for content in result.content])
+                
+                if 'Recent searches' in result_text and '[' in result_text:
+                    json_start = result_text.index('[')
+                    json_end = result_text.rindex(']') + 1
+                    json_str = result_text[json_start:json_end]
+                    return json.loads(json_str)
+                
+                return []
+    except Exception as e:
+        print(f"Error fetching recent searches: {e}")
+        return []
 
 
 async def process_chat_message(user_message, conversation_history, user_id, username, roles):
