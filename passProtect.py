@@ -20,8 +20,11 @@ from cli_login import save_session, update_last_login
 # Load environment variables
 load_dotenv()
 
-# OpenAI configuration
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Ollama configuration (using OpenAI SDK with custom base_url)
+client = OpenAI(
+    api_key="ollama",  # Ollama doesn't require a real API key
+    base_url=f"http://{os.getenv('OLLAMA_HOST')}/v1"
+)
 
 class PassProtectAgent:
     """AI Agent that uses MCP tools for database operations"""
@@ -168,7 +171,7 @@ class PassProtectAgent:
         
         # Call OpenAI with tools
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
             messages=[
                 {
                     "role": "system",
@@ -263,7 +266,7 @@ Always confirm what you're about to do before executing destructive operations (
             
             # Get final response from the model after tool execution
             final_response = client.chat.completions.create(
-                model="gpt-4o",
+                model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
                 messages=[
                     {
                         "role": "system",

@@ -24,8 +24,11 @@ app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24))
 app.config['PERMANENT_SESSION_LIFETIME'] = 28800  # 8 hours
 
-# OpenAI configuration
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Ollama configuration (using OpenAI SDK with custom base_url)
+openai_client = OpenAI(
+    api_key="ollama",  # Ollama doesn't require a real API key
+    base_url=f"http://{os.getenv('OLLAMA_HOST')}/v1"
+)
 
 
 def login_required(f):
@@ -405,7 +408,7 @@ Always confirm what you're about to do before executing destructive operations (
             
             # Call OpenAI
             completion = openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
                 messages=messages,
                 tools=openai_tools if openai_tools else None,
                 tool_choice="auto" if openai_tools else None
@@ -457,7 +460,7 @@ Always confirm what you're about to do before executing destructive operations (
                 messages.extend(tool_results)
                 
                 final_completion = openai_client.chat.completions.create(
-                    model="gpt-4o",
+                    model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
                     messages=messages
                 )
                 
