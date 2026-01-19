@@ -486,6 +486,55 @@
         </div>
     </div>
     
+    <!-- Modal for Update Record -->
+    <div class="modal-overlay" id="updateRecordModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>
+                    <span>✏️</span>
+                    <span>Update Password</span>
+                </h3>
+                <button class="modal-close" onclick="closeUpdateRecordModal()">&times;</button>
+            </div>
+            
+            <form id="updateRecordForm" onsubmit="submitUpdateRecord(event)">
+                <input type="hidden" id="updateRecordId" name="recordId">
+                <input type="hidden" id="updateCompanyNameHidden" name="companyNameForUpdate">
+                
+                <div class="form-field">
+                    <label for="updateCompanyName">Company/Service Name</label>
+                    <input type="text" id="updateCompanyName" name="companyNameDisplay" readonly 
+                           style="background: #f5f5f5; cursor: not-allowed;">
+                    <small>Company name cannot be changed</small>
+                </div>
+                
+                <div class="form-field">
+                    <label for="updateCompanyUserName">Username / Email</label>
+                    <input type="text" id="updateCompanyUserName" name="companyUserName" 
+                           placeholder="e.g., john@example.com">
+                </div>
+                
+                <div class="form-field">
+                    <label for="updateCompanyPassword">Password</label>
+                    <input type="password" id="updateCompanyPassword" name="companyPassword" 
+                           placeholder="Enter new password (leave blank to keep current)">
+                    <small>Leave blank if you don't want to change the password</small>
+                </div>
+                
+                <div class="form-field">
+                    <label for="updateNote">Note</label>
+                    <textarea id="updateNote" name="note" 
+                              placeholder="Optional: Any additional notes or comments"></textarea>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeUpdateRecordModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitUpdateBtn">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <div class="chat-input-area">
         <form class="chat-input-form" id="chatForm">
             <input type="text" 
@@ -695,6 +744,14 @@
                 }, 500);
             }
             
+            // Check if we should show the update record form
+            if (data.show_update_form && data.record_data) {
+                // Small delay so user can see the message first
+                setTimeout(() => {
+                    openUpdateRecordModal(data.record_data);
+                }, 500);
+            }
+            
         } catch (error) {
             addMessage('assistant', `Error: ${error.message}`);
         } finally {
@@ -703,6 +760,107 @@
         }
     });
     
+    
+    function openUpdateRecordModal(recordData) {
+        document.getElementById('updateRecordModal').classList.add('active');
+        
+        // Pre-fill the form with existing data
+        if (recordData) {
+            document.getElementById('updateRecordId').value = recordData.id || '';
+            document.getElementById('updateCompanyName').value = recordData.companyName || '';
+            document.getElementById('updateCompanyNameHidden').value = recordData.companyName || '';
+            document.getElementById('updateCompanyUserName').value = recordData.companyUserName || '';
+            document.getElementById('updateNote').value = recordData.note || '';
+            // Don't pre-fill password for security
+            document.getElementById('updateCompanyPassword').value = '';
+        }
+        
+        document.getElementById('updateCompanyUserName').focus();
+    }
+    
+    function closeUpdateRecordModal() {
+        document.getElementById('updateRecordModal').classList.remove('active');
+        document.getElementById('updateRecordForm').reset();
+    }
+    
+    async function submitUpdateRecord(event) {
+        event.preventDefault();
+        
+        const submitBtn = document.getElementById('submitUpdateBtn');
+        const formData = new FormData(event.target);
+        
+        const recordId = formData.get('recordId');
+        const companyName = formData.get('companyNameForUpdate');
+        const newPassword = formData.get('companyPassword');
+        const newUserName = formData.get('companyUserName');
+        const newNote = formData.get('note');
+        
+        // Build update message
+        let updates = [];
+        if (newPassword) updates.push(`- Password: ${newPassword}`);
+        if (newUserName) updates.push(`- Username: ${newUserName}`);
+        if (newNote !== null) updates.push(`- Note: ${newNote}`);
+        
+        if (updates.length === 0) {
+            alert('No changes to update. Please modify at least one field.');
+            return;
+        }
+        
+        const message = `Update the password record for company "${companyName}" (ID: ${recordId}) with the following changes:
+${updates.join('\n')}`;
+        
+        // Disable submit button
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Updating...';
+        
+        try {
+            // Close modal
+            closeUpdateRecordModal();
+            
+            // Add user message to UI
+            addMessage('user', message);
+            conversationHistory.push({ role: 'user', content: message });
+            
+            setLoading(true);
+            
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: message,
+                    history: conversationHistory
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update record');
+            }
+            
+            const responseData = await response.json();
+            
+            // Check if response contains password data
+            let passwordData = null;
+            if (responseData.password_data) {
+                passwordData = responseData.password_data;
+            }
+            
+            // Add assistant message to UI
+            addMessage('assistant', responseData.response, responseData.tool_calls, passwordData);
+            conversationHistory.push({ 
+                role: 'assistant', 
+                content: responseData.response 
+            });
+            
+        } catch (error) {
+            addMessage('assistant', `Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Update Password';
+        }
+    }
     
     function openNewRecordModal() {
         document.getElementById('newRecordModal').classList.add('active');

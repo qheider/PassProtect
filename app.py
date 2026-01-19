@@ -5,6 +5,7 @@ Multi-page web interface for PassProtect database operations
 
 import os
 import json
+import re
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from functools import wraps
 from dotenv import load_dotenv
@@ -153,6 +154,42 @@ def api_chat():
         return jsonify({'error': f'Failed to process request: {str(e)}'}), 500
 
 
+async def fetch_record_for_update(user_id, company_name):
+    """Fetch a record for update form pre-filling"""
+    try:
+        python_path = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
+        server_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
+        
+        server_params = StdioServerParameters(
+            command=python_path,
+            args=[server_script],
+            env={
+                "DB_HOST": os.getenv("DB_HOST", "localhost"),
+                "DB_USER": os.getenv("DB_USER", "root"),
+                "DB_PASSWORD": os.getenv("DB_PASSWORD", ""),
+                "DB_NAME": os.getenv("DB_NAME", "quaziinfodb"),
+                "USER_ID": str(user_id)
+            }
+        )
+        
+        async with stdio_client(server_params) as (stdio, write):
+            async with ClientSession(stdio, write) as session:
+                await session.initialize()
+                result = await session.call_tool("read_password", {"company": company_name})
+                result_text = "\n".join([content.text for content in result.content])
+                
+                if 'Password for' in result_text and '{' in result_text:
+                    json_start = result_text.index('{')
+                    json_end = result_text.rindex('}') + 1
+                    json_str = result_text[json_start:json_end]
+                    return json.loads(json_str)
+                
+                return None
+    except Exception as e:
+        print(f"Error fetching record for update: {e}")
+        return None
+
+
 async def process_chat_message(user_message, conversation_history, user_id, username, roles):
     """Process chat message using MCP tools and OpenAI"""
     
@@ -221,13 +258,16 @@ CRITICAL INSTRUCTIONS:
 4. NEVER claim you "don't have access" or "cannot access" - you have tools, use them!
 5. NEVER refuse to search - always try the tool first, then report the actual results
 6. When users ask to CREATE/ADD a new password WITHOUT providing all details, simply acknowledge and let the UI form handle it
+7. When users ask to UPDATE/MODIFY a password WITHOUT providing all details, acknowledge and let the UI form handle it
+8. DO NOT ask for details when user wants to create or update - the form will collect them
 
 AVAILABLE TOOLS AND WHEN TO USE THEM:
 - Get/retrieve/show password for SPECIFIC company → ALWAYS use read_password tool (supports case-insensitive and partial matching)
 - List/browse multiple passwords → use read_records with no conditions or specific filters
 - Add/create/insert new password WITH complete data provided → use create_record tool
 - Add/create/insert new password WITHOUT complete data → acknowledge request (form UI will collect data)
-- Update/modify existing password → use update_record
+- Update/modify existing password WITH complete data provided → use update_record
+- Update/modify existing password WITHOUT complete data → acknowledge request (form UI will collect data)
 - Delete/remove records → use delete_record (admin only)
 - See table structure → use get_table_schema
 - Run custom queries → use execute_custom_query (admin only)
@@ -258,6 +298,26 @@ You MUST use create_record tool with this exact format:
     "created_by_user_id": {user_id}
   }}
 }}
+
+UPDATING EXISTING RECORDS:
+When user provides update data in format like:
+"Update the password record for company \"[name]\" (ID: [id]) with the following changes:
+- Password: [new_password]
+- Username: [new_username]
+- Note: [new_note]"
+
+You MUST use update_record tool with this exact format:
+{{
+  "data": {{
+    "companyPassword": "[new_password]",
+    "companyUserName": "[new_username]",
+    "note": "[new_note]"
+  }},
+  "conditions": {{
+    "id": [id]
+  }}
+}}
+Only include fields that are being updated (don't include fields that aren't mentioned).
 
 RESPONSE RULES:
 - If tool returns data: Show the results clearly
@@ -354,12 +414,15 @@ Always confirm what you're about to do before executing destructive operations (
                     'password_data': password_data
                 }
             else:
-                # Direct response - check if this is a create record request
+                # Direct response - check if this is a create/update record request
                 show_form = False
+                show_update_form = False
+                record_data = None
                 response_text = assistant_message.content
                 
                 # Detect if user is asking to create a new record
                 create_keywords = ['create', 'add', 'new record', 'new password', 'save password', 'store password']
+                update_keywords = ['update', 'modify', 'change', 'edit']
                 user_message_lower = user_message.lower()
                 
                 if any(keyword in user_message_lower for keyword in create_keywords):
@@ -370,10 +433,47 @@ Always confirm what you're about to do before executing destructive operations (
                         show_form = True
                         response_text = "I'll help you create a new password record. Please fill in the form below with the details."
                 
+                elif any(keyword in user_message_lower for keyword in update_keywords):
+                    # Check if they're asking to update without providing details
+                    has_data = any(indicator in user_message_lower for indicator in ['password:', '- password', '- username', 'with the following'])
+                    
+                    if not has_data:
+                        # Extract company name from the message
+                        # Try multiple patterns to find company name
+                        company_name = None
+                        
+                        # Pattern 1: "update [company]" or "update a record [company]"
+                        match = re.search(r'(?:update|modify|change|edit)(?:\s+(?:a\s+)?record)?(?:\s+for)?\s+(.+?)(?:\s*$)', user_message_lower)
+                        if match:
+                            potential_name = match.group(1).strip()
+                            # Clean up common filler words
+                            potential_name = re.sub(r'^(?:for|company|the|a|an)\s+', '', potential_name)
+                            if potential_name and len(potential_name) > 1:
+                                company_name = potential_name
+                        
+                        # Pattern 2: Just a company name after update discussion
+                        if not company_name and len(user_message.strip().split()) <= 3:
+                            # If message is short (1-3 words) after update context, treat as company name
+                            company_name = user_message.strip()
+                        
+                        if company_name:
+                            # Fetch the record using a separate async call
+                            record_data = await fetch_record_for_update(user_id, company_name)
+                            
+                            if record_data:
+                                show_update_form = True
+                                response_text = f"I found the record for {company_name}. Please update the fields you want to change in the form below."
+                            else:
+                                response_text = f"I couldn't find a record for '{company_name}'. Please check the company name and try again."
+                        else:
+                            response_text = "Please specify which company's record you want to update."
+                
                 return {
                     'response': response_text,
                     'tool_calls': [],
-                    'show_form': show_form
+                    'show_form': show_form,
+                    'show_update_form': show_update_form,
+                    'record_data': record_data
                 }
 
 
