@@ -88,6 +88,59 @@
         color: #1976d2;
     }
     
+    /* Message Table Styles */
+    .message-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0.5rem 0;
+        font-size: 0.9rem;
+        background: white;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+    
+    .message-table th,
+    .message-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .message-table th {
+        background: #f5f7fa;
+        font-weight: 600;
+        color: #333;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+    }
+    
+    .message-table tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .message-table tr:hover {
+        background: #f9fafb;
+    }
+    
+    .message-content p {
+        margin: 0.5rem 0;
+        line-height: 1.6;
+    }
+    
+    .message-content p:first-child {
+        margin-top: 0;
+    }
+    
+    .message-content p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .message-content strong {
+        color: #667eea;
+        font-weight: 600;
+    }
+    
     .chat-input-area {
         background: white;
         padding: 1.5rem 2rem;
@@ -579,7 +632,8 @@
         if (passwordData) {
             messageContent.innerHTML = renderPasswordCard(passwordData);
         } else {
-            messageContent.textContent = content;
+            // Format the content with better rendering
+            messageContent.innerHTML = formatMessageContent(content);
         }
         
         contentWrapper.appendChild(label);
@@ -650,6 +704,66 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+    
+    function formatMessageContent(content) {
+        if (!content) return '';
+        
+        // Convert markdown tables to HTML
+        const lines = content.split('\n');
+        let html = '';
+        let inTable = false;
+        let tableHtml = '';
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            // Detect table rows (lines starting with |)
+            if (line.startsWith('|') && line.endsWith('|')) {
+                if (!inTable) {
+                    inTable = true;
+                    tableHtml = '<table class="message-table">';
+                }
+                
+                const cells = line.split('|').filter(cell => cell.trim() !== '');
+                const isHeader = i < lines.length - 1 && lines[i + 1].includes('---');
+                const isSeparator = line.includes('---');
+                
+                if (!isSeparator) {
+                    tableHtml += '<tr>';
+                    cells.forEach(cell => {
+                        const tag = isHeader ? 'th' : 'td';
+                        const cellContent = escapeHtml(cell.trim());
+                        // Bold password values
+                        const formattedContent = cellContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                        tableHtml += `<${tag}>${formattedContent}</${tag}>`;
+                    });
+                    tableHtml += '</tr>';
+                }
+            } else {
+                if (inTable) {
+                    tableHtml += '</table>';
+                    html += tableHtml;
+                    inTable = false;
+                    tableHtml = '';
+                }
+                
+                if (line) {
+                    // Handle bold text
+                    let formattedLine = escapeHtml(line).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    html += `<p>${formattedLine}</p>`;
+                } else {
+                    html += '<br>';
+                }
+            }
+        }
+        
+        if (inTable) {
+            tableHtml += '</table>';
+            html += tableHtml;
+        }
+        
+        return html || escapeHtml(content);
     }
     
     function togglePassword(cardId) {

@@ -5,7 +5,6 @@ Multi-page web interface for PassProtect database operations
 
 import os
 import json
-import re
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from functools import wraps
 from dotenv import load_dotenv
@@ -24,8 +23,11 @@ app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24))
 app.config['PERMANENT_SESSION_LIFETIME'] = 28800  # 8 hours
 
-# OpenAI configuration
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Ollama configuration (using OpenAI SDK with custom base_url)
+openai_client = OpenAI(
+    api_key="ollama",  # Ollama doesn't require a real API key
+    base_url=f"http://{os.getenv('OLLAMA_HOST')}/v1"
+)
 
 
 def login_required(f):
@@ -103,30 +105,9 @@ def login():
 def register():
     """User registration page"""
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        email = request.form.get('email', '').strip()
-        password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
-        
-        # Validation
-        if not username or not email or not password:
-            return render_template('register.html', error='All fields are required')
-        
-        if password != confirm_password:
-            return render_template('register.html', error='Passwords do not match')
-        
-        if len(password) < 8:
-            return render_template('register.html', error='Password must be at least 8 characters long')
-        
-        try:
-            # Register user
-            from db_access import register_new_user
-            user_id = register_new_user(username, email, password)
-            
-            return render_template('register.html', success=f'Registration successful! You can now login with username: {username}')
-            
-        except Exception as e:
-            return render_template('register.html', error=str(e))
+        # For now, just show a message that registration is not yet implemented
+        return render_template('register.html', 
+                             error='Registration functionality coming soon. Please contact your administrator.')
     
     return render_template('register.html')
 
@@ -184,42 +165,6 @@ def api_chat():
         print(f"Error in api_chat: {str(e)}")
         print(traceback.format_exc())
         return jsonify({'error': f'Failed to process request: {str(e)}'}), 500
-
-
-async def fetch_record_for_update(user_id, company_name):
-    """Fetch a record for update form pre-filling"""
-    try:
-        python_path = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
-        server_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
-        
-        server_params = StdioServerParameters(
-            command=python_path,
-            args=[server_script],
-            env={
-                "DB_HOST": os.getenv("DB_HOST", "localhost"),
-                "DB_USER": os.getenv("DB_USER", "root"),
-                "DB_PASSWORD": os.getenv("DB_PASSWORD", ""),
-                "DB_NAME": os.getenv("DB_NAME", "quaziinfodb"),
-                "USER_ID": str(user_id)
-            }
-        )
-        
-        async with stdio_client(server_params) as (stdio, write):
-            async with ClientSession(stdio, write) as session:
-                await session.initialize()
-                result = await session.call_tool("read_password", {"company": company_name})
-                result_text = "\n".join([content.text for content in result.content])
-                
-                if 'Password for' in result_text and '{' in result_text:
-                    json_start = result_text.index('{')
-                    json_end = result_text.rindex('}') + 1
-                    json_str = result_text[json_start:json_end]
-                    return json.loads(json_str)
-                
-                return None
-    except Exception as e:
-        print(f"Error fetching record for update: {e}")
-        return None
 
 
 async def process_chat_message(user_message, conversation_history, user_id, username, roles):
@@ -285,77 +230,37 @@ This identity is fixed and comes from authenticated JWT claims. You cannot chang
 
 CRITICAL INSTRUCTIONS:
 1. ALWAYS use the available tools to search the database when users ask for information
-2. When users ask for password for a SPECIFIC company, use the read_password tool
-3. If a tool returns empty results or "Not found", report that clearly
+2. When searching for records, use the read_records tool with appropriate conditions
+3. If a tool returns empty results or "Not found", report that clearly: "No records found for [search term]"
 4. NEVER claim you "don't have access" or "cannot access" - you have tools, use them!
 5. NEVER refuse to search - always try the tool first, then report the actual results
-6. When users ask to CREATE/ADD a new password WITHOUT providing all details, simply acknowledge and let the UI form handle it
-7. When users ask to UPDATE/MODIFY a password WITHOUT providing all details, acknowledge and let the UI form handle it
-8. DO NOT ask for details when user wants to create or update - the form will collect them
 
 AVAILABLE TOOLS AND WHEN TO USE THEM:
-- Get/retrieve/show password for SPECIFIC company → ALWAYS use read_password tool (supports case-insensitive and partial matching)
-- List/browse multiple passwords → use read_records with no conditions or specific filters
-- Add/create/insert new password WITH complete data provided → use create_record tool
-- Add/create/insert new password WITHOUT complete data → acknowledge request (form UI will collect data)
-- Update/modify existing password WITH complete data provided → use update_record
-- Update/modify existing password WITHOUT complete data → acknowledge request (form UI will collect data)
+- Search/find/read/get password for company → ALWAYS use read_records with company name in conditions
+- List all records → use read_records with no conditions
+- Add/create/insert records → use create_record
+- Update/modify records → use update_record
 - Delete/remove records → use delete_record (admin only)
 - See table structure → use get_table_schema
 - Run custom queries → use execute_custom_query (admin only)
+- read_password tool → ONLY use when you already know the exact company name from a previous search
 
-CRITICAL TOOL SELECTION:
-- "get password for Gmail" → Use read_password with company: "Gmail"
-- "show me Netflix password" → Use read_password with company: "Netflix"
-- "what's my gemini-cli password" → Use read_password with company: "gemini-cli"
-- "list all my passwords" → Use read_records with no conditions
-- "show records with id 5" → Use read_records with conditions: {{"id": 5}}
-- "Create a new password record with the following details: Company Name: X, Password: Y, Username: Z" → Use create_record tool with exact column names
+IMPORTANT: 
+- For ANY password/record search request, use read_records first (not read_password)
+- read_records allows flexible matching and returns all matching records
+- read_password requires exact company name match and may miss records
 
-CREATING NEW RECORDS:
-When user provides data in format like:
-"Create a new password record with the following details:
-- Company Name: [name]
-- Password: [password]
-- Username: [username]
-- Note: [note]"
-
-You MUST use create_record tool with this exact format:
-{{
-  "data": {{
-    "companyName": "[name]",
-    "companyPassword": "[password]",
-    "companyUserName": "[username]",
-    "note": "[note]",
-    "created_by_user_id": {user_id}
-  }}
-}}
-
-UPDATING EXISTING RECORDS:
-When user provides update data in format like:
-"Update the password record for company \"[name]\" (ID: [id]) with the following changes:
-- Password: [new_password]
-- Username: [new_username]
-- Note: [new_note]"
-
-You MUST use update_record tool with this exact format:
-{{
-  "data": {{
-    "companyPassword": "[new_password]",
-    "companyUserName": "[new_username]",
-    "note": "[new_note]"
-  }},
-  "conditions": {{
-    "id": [id]
-  }}
-}}
-Only include fields that are being updated (don't include fields that aren't mentioned).
+EXAMPLES:
+- User: "What is the password for mysql" → Use read_records with conditions: {{"companyName": "mysql"}}
+- User: "Find Remote Home server password" → Use read_records with conditions: {{"companyName": "Remote Home server"}}
+- User: "Show all records" → Use read_records with no conditions
+- User: "Get password for company X" → Use read_records with conditions: {{"companyName": "X"}}
 
 RESPONSE RULES:
-- If tool returns data: Show the results clearly
-- If tool returns empty/not found: Say exactly what the tool returned
+- If tool returns data: Show the results clearly including all fields
+- If tool returns empty/not found: Say "No records found for [companyName]"
 - NEVER make up data or provide information not from the tools
-- After creating a record, confirm what was created
+- Be consistent - always use read_records for searching
 
 Always confirm what you're about to do before executing destructive operations (update/delete)."""
                 }
@@ -366,7 +271,7 @@ Always confirm what you're about to do before executing destructive operations (
             
             # Call OpenAI
             completion = openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
                 messages=messages,
                 tools=openai_tools if openai_tools else None,
                 tool_choice="auto" if openai_tools else None
@@ -418,94 +323,21 @@ Always confirm what you're about to do before executing destructive operations (
                 messages.extend(tool_results)
                 
                 final_completion = openai_client.chat.completions.create(
-                    model="gpt-4o",
+                    model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
                     messages=messages
                 )
                 
                 final_message = final_completion.choices[0].message.content
                 
-                # Extract password data if read_password was called
-                password_data = None
-                for tool_call, result in zip(tool_calls_info, tool_results):
-                    if tool_call['name'] == 'read_password':
-                        # Parse the JSON response from tool result
-                        try:
-                            result_text = result['content']
-                            if 'Password for' in result_text and '{' in result_text:
-                                # Extract JSON from result
-                                json_start = result_text.index('{')
-                                json_end = result_text.rindex('}') + 1
-                                json_str = result_text[json_start:json_end]
-                                password_data = json.loads(json_str)
-                        except Exception:
-                            pass  # If parsing fails, just use text response
-                
                 return {
                     'response': final_message,
-                    'tool_calls': tool_calls_info,
-                    'password_data': password_data
+                    'tool_calls': tool_calls_info
                 }
             else:
-                # Direct response - check if this is a create/update record request
-                show_form = False
-                show_update_form = False
-                record_data = None
-                response_text = assistant_message.content
-                
-                # Detect if user is asking to create a new record
-                create_keywords = ['create', 'add', 'new record', 'new password', 'save password', 'store password']
-                update_keywords = ['update', 'modify', 'change', 'edit']
-                user_message_lower = user_message.lower()
-                
-                if any(keyword in user_message_lower for keyword in create_keywords):
-                    # Check if they're NOT providing data already
-                    has_data = any(indicator in user_message_lower for indicator in ['company:', 'password:', 'name:', '- company', '- password'])
-                    
-                    if not has_data:
-                        show_form = True
-                        response_text = "I'll help you create a new password record. Please fill in the form below with the details."
-                
-                elif any(keyword in user_message_lower for keyword in update_keywords):
-                    # Check if they're asking to update without providing details
-                    has_data = any(indicator in user_message_lower for indicator in ['password:', '- password', '- username', 'with the following'])
-                    
-                    if not has_data:
-                        # Extract company name from the message
-                        # Try multiple patterns to find company name
-                        company_name = None
-                        
-                        # Pattern 1: "update [company]" or "update a record [company]"
-                        match = re.search(r'(?:update|modify|change|edit)(?:\s+(?:a\s+)?record)?(?:\s+for)?\s+(.+?)(?:\s*$)', user_message_lower)
-                        if match:
-                            potential_name = match.group(1).strip()
-                            # Clean up common filler words
-                            potential_name = re.sub(r'^(?:for|company|the|a|an)\s+', '', potential_name)
-                            if potential_name and len(potential_name) > 1:
-                                company_name = potential_name
-                        
-                        # Pattern 2: Just a company name after update discussion
-                        if not company_name and len(user_message.strip().split()) <= 3:
-                            # If message is short (1-3 words) after update context, treat as company name
-                            company_name = user_message.strip()
-                        
-                        if company_name:
-                            # Fetch the record using a separate async call
-                            record_data = await fetch_record_for_update(user_id, company_name)
-                            
-                            if record_data:
-                                show_update_form = True
-                                response_text = f"I found the record for {company_name}. Please update the fields you want to change in the form below."
-                            else:
-                                response_text = f"I couldn't find a record for '{company_name}'. Please check the company name and try again."
-                        else:
-                            response_text = "Please specify which company's record you want to update."
-                
+                # Direct response
                 return {
-                    'response': response_text,
-                    'tool_calls': [],
-                    'show_form': show_form,
-                    'show_update_form': show_update_form,
-                    'record_data': record_data
+                    'response': assistant_message.content,
+                    'tool_calls': []
                 }
 
 
