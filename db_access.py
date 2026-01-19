@@ -184,4 +184,13 @@ def register_new_user(username: str, email: str, password: str) -> int:
     params = (username, email, password_hash, 1, 0, now, now, None)
     
     result = execute(sql, params)
-    return result['last_insert_id']
+    user_id = result['last_insert_id']
+    
+    # Assign default role (generalUser with id=5)
+    role_sql = """
+        INSERT INTO users_roles (users_ID, roles_ID)
+        VALUES (%s, %s)
+    """
+    execute(role_sql, (user_id, 5))
+    
+    return user_id
