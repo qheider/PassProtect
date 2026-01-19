@@ -220,11 +220,13 @@ CRITICAL INSTRUCTIONS:
 3. If a tool returns empty results or "Not found", report that clearly
 4. NEVER claim you "don't have access" or "cannot access" - you have tools, use them!
 5. NEVER refuse to search - always try the tool first, then report the actual results
+6. When users ask to CREATE/ADD a new password WITHOUT providing all details, simply acknowledge and let the UI form handle it
 
 AVAILABLE TOOLS AND WHEN TO USE THEM:
 - Get/retrieve/show password for SPECIFIC company → ALWAYS use read_password tool (supports case-insensitive and partial matching)
 - List/browse multiple passwords → use read_records with no conditions or specific filters
-- Add/create/insert new password → use create_record
+- Add/create/insert new password WITH complete data provided → use create_record tool
+- Add/create/insert new password WITHOUT complete data → acknowledge request (form UI will collect data)
 - Update/modify existing password → use update_record
 - Delete/remove records → use delete_record (admin only)
 - See table structure → use get_table_schema
@@ -236,11 +238,32 @@ CRITICAL TOOL SELECTION:
 - "what's my gemini-cli password" → Use read_password with company: "gemini-cli"
 - "list all my passwords" → Use read_records with no conditions
 - "show records with id 5" → Use read_records with conditions: {{"id": 5}}
+- "Create a new password record with the following details: Company Name: X, Password: Y, Username: Z" → Use create_record tool with exact column names
+
+CREATING NEW RECORDS:
+When user provides data in format like:
+"Create a new password record with the following details:
+- Company Name: [name]
+- Password: [password]
+- Username: [username]
+- Note: [note]"
+
+You MUST use create_record tool with this exact format:
+{{
+  "data": {{
+    "companyName": "[name]",
+    "companyPassword": "[password]",
+    "companyUserName": "[username]",
+    "note": "[note]",
+    "created_by_user_id": {user_id}
+  }}
+}}
 
 RESPONSE RULES:
 - If tool returns data: Show the results clearly
 - If tool returns empty/not found: Say exactly what the tool returned
 - NEVER make up data or provide information not from the tools
+- After creating a record, confirm what was created
 
 Always confirm what you're about to do before executing destructive operations (update/delete)."""
                 }
@@ -331,10 +354,26 @@ Always confirm what you're about to do before executing destructive operations (
                     'password_data': password_data
                 }
             else:
-                # Direct response
+                # Direct response - check if this is a create record request
+                show_form = False
+                response_text = assistant_message.content
+                
+                # Detect if user is asking to create a new record
+                create_keywords = ['create', 'add', 'new record', 'new password', 'save password', 'store password']
+                user_message_lower = user_message.lower()
+                
+                if any(keyword in user_message_lower for keyword in create_keywords):
+                    # Check if they're NOT providing data already
+                    has_data = any(indicator in user_message_lower for indicator in ['company:', 'password:', 'name:', '- company', '- password'])
+                    
+                    if not has_data:
+                        show_form = True
+                        response_text = "I'll help you create a new password record. Please fill in the form below with the details."
+                
                 return {
-                    'response': assistant_message.content,
-                    'tool_calls': []
+                    'response': response_text,
+                    'tool_calls': [],
+                    'show_form': show_form
                 }
 
 
