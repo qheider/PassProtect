@@ -51,6 +51,24 @@
             </div>
             
             <div class="card">
+                <div class="card-icon">🔍</div>
+                <h3>Recent Searches</h3>
+                {% if recent_searches and recent_searches|length > 0 %}
+                <ul class="operations-list">
+                    {% for search in recent_searches %}
+                    <li>
+                        <strong>{{ search.companyName }}</strong>
+                        <br>
+                        <small style="color: #666;">{{ search.last_searched }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p style="color: #666; padding: 10px;">No recent searches</p>
+                {% endif %}
+            </div>
+            
+            <div class="card">
                 <div class="card-icon">🛠️</div>
                 <h3>Available Operations</h3>
                 <ul class="operations-list">

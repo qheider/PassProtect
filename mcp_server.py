@@ -63,6 +63,17 @@ def execute_query(query: str, params: tuple = None, fetch: bool = False):
             connection.close()
 
 
+def log_search(company_name: str, user_id: str):
+    """Log search activity to searchlog table"""
+    try:
+        from datetime import datetime
+        query = "INSERT INTO searchlog (search_date, companyName, search_by_user) VALUES (%s, %s, %s)"
+        execute_query(query, (datetime.now(), company_name, user_id))
+    except Exception as e:
+        # Don't fail the search if logging fails, just print error
+        print(f"Search logging error: {e}")
+
+
 @app.list_tools()
 async def list_tools() -> list[Tool]:
     """List all available CRUD tools"""
@@ -167,6 +178,21 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": ["company"]
             }
+        ),
+        Tool(
+            name="get_recent_searches",
+            description="Get the most recent password searches performed by the authenticated user. Returns a list of recently searched company names with search dates.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of recent searches to return (default: 10)",
+                        "default": 10
+                    }
+                },
+                "required": []
+            }
         )
     ]
 
@@ -214,6 +240,9 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             query += f" LIMIT {limit}"
             
             results = execute_query(query, tuple(params), fetch=True)
+            
+            # Log search activity (list all records)
+            log_search("[LIST_ALL_RECORDS]", AUTHENTICATED_USER_ID)
             
             if not results:
                 return [TextContent(type="text", text="No records found. You don't have any saved passwords yet.")]
@@ -311,6 +340,9 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             if not company:
                 return [TextContent(type="text", text="Error: Company name is required")]
             
+            # Log search activity
+            log_search(company, AUTHENTICATED_USER_ID)
+            
             # Parameterized query with created_by_user_id AND companyName
             # Use LOWER() for case-insensitive comparison
             # This ensures users can ONLY access their own passwords
@@ -338,6 +370,33 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     type="text",
                     text=f"Found {len(results)} matching passwords:\n{json.dumps(results, indent=2, default=str)}"
                 )]
+        
+        elif name == "get_recent_searches":
+            # Security: Ensure user authentication
+            if not AUTHENTICATED_USER_ID:
+                return [TextContent(type="text", text="Error: User authentication context not found")]
+            
+            limit = arguments.get("limit", 10)
+            
+            # Get recent searches for this user, ordered by most recent first
+            query = """
+                SELECT DISTINCT companyName, MAX(search_date) as last_searched
+                FROM searchlog
+                WHERE search_by_user = %s AND companyName != '[LIST_ALL_RECORDS]'
+                GROUP BY companyName
+                ORDER BY last_searched DESC
+                LIMIT %s
+            """
+            
+            results = execute_query(query, (AUTHENTICATED_USER_ID, limit), fetch=True)
+            
+            if not results:
+                return [TextContent(type="text", text="No recent searches found.")]
+            
+            return [TextContent(
+                type="text",
+                text=f"Recent searches ({len(results)}):\n{json.dumps(results, indent=2, default=str)}"
+            )]
         
         else:
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
