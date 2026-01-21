@@ -143,7 +143,7 @@ def execute(sql: str, params: Optional[Tuple] = None) -> Dict[str, Any]:
             connection.close()
 
 
-def register_new_user(username: str, email: str, password: str) -> int:
+def register_new_user(username: str, email: str, password: str, user_field: str = None) -> int:
     """
     Register a new user in the database.
     
@@ -151,6 +151,7 @@ def register_new_user(username: str, email: str, password: str) -> int:
         username: Username for the new user
         email: Email address for the new user
         password: Plain text password (will be hashed)
+        user_field: Optional user field value
         
     Returns:
         The user ID of the newly created user
@@ -176,12 +177,12 @@ def register_new_user(username: str, email: str, password: str) -> int:
     
     # Insert new user
     sql = """
-        INSERT INTO user (userName, email, password, enabled, archived, date_created, date_updated, created_by_user_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO user (userName, email, password, enabled, archived, date_created, date_updated, created_by_user_id, user)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     now = datetime.now()
-    params = (username, email, password_hash, 1, 0, now, now, None)
+    params = (username, email, password_hash, 1, 0, now, now, None, user_field)
     
     result = execute(sql, params)
     user_id = result['last_insert_id']
@@ -194,3 +195,63 @@ def register_new_user(username: str, email: str, password: str) -> int:
     execute(role_sql, (user_id, 5))
     
     return user_id
+
+
+def update_user_profile(user_id: int, email: str, user_field: str = None, current_password: str = None, new_password: str = None) -> None:
+    """
+    Update user profile information.
+    
+    Args:
+        user_id: ID of the user to update
+        email: New email address
+        user_field: New user field value (optional)
+        current_password: Current password for verification (required if changing password)
+        new_password: New password to set (optional)
+        
+    Raises:
+        Exception: If update fails or password verification fails
+    """
+    import bcrypt
+    from datetime import datetime
+    
+    # Check if email is already used by another user
+    existing_email = fetch_one("SELECT id FROM user WHERE email = %s AND id != %s", (email, user_id))
+    if existing_email:
+        raise Exception(f"Email '{email}' is already in use by another account")
+    
+    # If changing password, verify current password first
+    if new_password:
+        if not current_password:
+            raise Exception("Current password is required to change password")
+        
+        user_record = fetch_one("SELECT password FROM user WHERE id = %s", (user_id,))
+        if not user_record:
+            raise Exception("User not found")
+        
+        # Verify current password
+        try:
+            if not bcrypt.checkpw(current_password.encode('utf-8'), user_record['password'].encode('utf-8')):
+                raise Exception("Current password is incorrect")
+        except Exception as e:
+            raise Exception("Current password is incorrect")
+        
+        # Hash new password
+        new_password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # Update with password
+        sql = """
+            UPDATE user 
+            SET email = %s, user = %s, password = %s, date_updated = %s
+            WHERE id = %s
+        """
+        params = (email, user_field, new_password_hash, datetime.now(), user_id)
+    else:
+        # Update without password
+        sql = """
+            UPDATE user 
+            SET email = %s, user = %s, date_updated = %s
+            WHERE id = %s
+        """
+        params = (email, user_field, datetime.now(), user_id)
+    
+    execute(sql, params)

@@ -107,10 +107,11 @@ def register():
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
+        user_field = request.form.get('user_field', '').strip() or None
         
         # Validation
         if not username or not email or not password:
-            return render_template('register.html', error='All fields are required')
+            return render_template('register.html', error='Username, email, and password are required')
         
         if password != confirm_password:
             return render_template('register.html', error='Passwords do not match')
@@ -121,7 +122,7 @@ def register():
         try:
             # Register user
             from db_access import register_new_user
-            user_id = register_new_user(username, email, password)
+            user_id = register_new_user(username, email, password, user_field)
             
             return render_template('register.html', success=f'Registration successful! You can now login with username: {username}')
             
@@ -145,10 +146,16 @@ def dashboard():
     # Fetch recent searches
     recent_searches = asyncio.run(fetch_recent_searches(request.user_id, limit=5))
     
+    # Get full user info including user field
+    from db_access import fetch_one
+    user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+    
     return render_template('dashboard.html', 
                          username=request.username,
                          roles=', '.join(request.roles),
-                         recent_searches=recent_searches)
+                         recent_searches=recent_searches,
+                         user_field=user_info.get('user') if user_info else None,
+                         email=user_info.get('email') if user_info else None)
 
 
 @app.route('/chat')
@@ -156,6 +163,81 @@ def dashboard():
 def chat():
     """Chat interface for database operations"""
     return render_template('chat.html',
+                         username=request.username,
+                         roles=', '.join(request.roles))
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """User profile update page"""
+    from db_access import fetch_one, update_user_profile
+    
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        user_field = request.form.get('user_field', '').strip() or None
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        # Validation
+        if not email:
+            user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+            return render_template('profile.html', 
+                                 error='Email is required',
+                                 user_info=user_info,
+                                 username=request.username,
+                                 roles=', '.join(request.roles))
+        
+        # If changing password, validate it
+        if new_password:
+            if not current_password:
+                user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+                return render_template('profile.html', 
+                                     error='Current password is required to change password',
+                                     user_info=user_info,
+                                     username=request.username,
+                                     roles=', '.join(request.roles))
+            
+            if new_password != confirm_password:
+                user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+                return render_template('profile.html', 
+                                     error='New passwords do not match',
+                                     user_info=user_info,
+                                     username=request.username,
+                                     roles=', '.join(request.roles))
+            
+            if len(new_password) < 8:
+                user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+                return render_template('profile.html', 
+                                     error='Password must be at least 8 characters long',
+                                     user_info=user_info,
+                                     username=request.username,
+                                     roles=', '.join(request.roles))
+        
+        try:
+            # Update user profile
+            update_user_profile(request.user_id, email, user_field, current_password, new_password)
+            
+            user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+            return render_template('profile.html', 
+                                 success='Profile updated successfully!',
+                                 user_info=user_info,
+                                 username=request.username,
+                                 roles=', '.join(request.roles))
+            
+        except Exception as e:
+            user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+            return render_template('profile.html', 
+                                 error=str(e),
+                                 user_info=user_info,
+                                 username=request.username,
+                                 roles=', '.join(request.roles))
+    
+    # GET request - show profile form
+    user_info = fetch_one("SELECT userName, email, user FROM user WHERE id = %s", (request.user_id,))
+    return render_template('profile.html',
+                         user_info=user_info,
                          username=request.username,
                          roles=', '.join(request.roles))
 
