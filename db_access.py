@@ -214,10 +214,9 @@ def update_user_profile(user_id: int, email: str, user_field: str = None, curren
     import bcrypt
     from datetime import datetime
     
-    # Check if email is already used by another user
-    existing_email = fetch_one("SELECT id FROM user WHERE email = %s AND id != %s", (email, user_id))
-    if existing_email:
-        raise Exception(f"Email '{email}' is already in use by another account")
+    # Validate email is provided (mandatory field)
+    if not email or not email.strip():
+        raise Exception("Email is required")
     
     # If changing password, verify current password first
     if new_password:
