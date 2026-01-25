@@ -32,6 +32,10 @@ DB_NAME=quaziinfodb
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_key
 
+# Ollama Configuration
+OLLAMA_MODEL=gpt-oss:20b
+OLLAMA_HOST=100.104.157.67:11434
+
 # JWT Configuration
 JWT_SECRET=your_jwt_secret
 

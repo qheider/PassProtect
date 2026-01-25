@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Update Profile - PassProtect{% endblock %}
+
+{% block body %}
+<div class="dashboard-container">
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <h1>🔐 PassProtect</h1>
+        </div>
+        <div class="navbar-menu">
+            <span class="user-info">
+                <strong>{{ username }}</strong>
+                <span class="user-roles">({{ roles }})</span>
+            </span>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary" style="margin-right: 10px;">Back to Dashboard</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+        </div>
+    </nav>
+    
+    <div class="dashboard-content">
+        <div class="login-container" style="padding: 2rem 0;">
+            <div class="login-box" style="max-width: 600px;">
+                <div class="login-header">
+                    <h1>👤 Update Profile</h1>
+                    <p>Update your account information</p>
+                </div>
+                
+                {% if error %}
+                <div class="error-message">
+                    <strong>❌ Error:</strong> {{ error }}
+                </div>
+                {% endif %}
+                
+                {% if success %}
+                <div class="success-message" style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    <strong>✅ Success:</strong> {{ success }}
+                </div>
+                {% endif %}
+                
+                <form method="POST" class="login-form">
+                        <div class="form-group">
+                        <label for="user_field">User</label>
+                        <input type="text" 
+                               id="user_field" 
+                               name="user_field" 
+                               value="{{ user_info.user if user_info and user_info.user else '' }}"
+                               placeholder="User Name">
+                        <small style="color: #666; font-size: 0.85rem;">This is an optional field for additional user data</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" 
+                               id="email" 
+                               name="email" 
+                               value="{{ user_info.email if user_info else email }}"
+                               required
+                               placeholder="your.email@example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username">Username *</label>
+                        <input type="text" 
+                               id="username" 
+                               name="username" 
+                               value="{{ user_info.userName if user_info else username }}"
+                               readonly
+                               disabled
+                               style="background: #f5f5f5; cursor: not-allowed;">
+                        <small style="color: #666; font-size: 0.85rem;">Username cannot be changed</small>
+                    </div>
+                   
+                                      
+                    <hr style="margin: 2rem 0; border: none; border-top: 2px solid #f0f0f0;">
+                    
+                    <h3 style="margin-bottom: 1rem; color: #667eea;">Change Password (Optional)</h3>
+                    <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">Leave blank if you don't want to change your password</p>
+                    
+                    <div class="form-group">
+                        <label for="current_password">Current Password</label>
+                        <input type="password" 
+                               id="current_password" 
+                               name="current_password" 
+                               placeholder="Enter your current password">
+                        <small style="color: #666; font-size: 0.85rem;">Required only if changing password</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new_password">New Password</label>
+                        <input type="password" 
+                               id="new_password" 
+                               name="new_password" 
+                               placeholder="At least 8 characters">
+                        <small style="color: #666; font-size: 0.85rem;">Password must be at least 8 characters long</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirm_password">Confirm New Password</label>
+                        <input type="password" 
+                               id="confirm_password" 
+                               name="confirm_password" 
+                               placeholder="Re-enter your new password">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Update Profile</button>
+                </form>
+                
+                <div class="register-link" style="text-align: center; margin-top: 1.5rem;">
+                    <a href="{{ url_for('dashboard') }}" style="color: #667eea; text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .login-container {
+        min-height: auto;
+        background: transparent;
+    }
+    
+    .login-box {
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+{% endblock %}

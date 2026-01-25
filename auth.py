@@ -41,7 +41,7 @@ def authenticate_user(username: str, password: str) -> Dict[str, any]:
         raise AuthenticationError("Username and password are required")
     
     # Query user by userName
-    sql = "SELECT id, userName, email, password, enabled, archived FROM user WHERE userName = %s"
+    sql = "SELECT id, userName, email, password, enabled, archived, user FROM user WHERE userName = %s"
     user_record = fetch_one(sql, (username,))
     
     # Check if user exists
@@ -66,7 +66,8 @@ def authenticate_user(username: str, password: str) -> Dict[str, any]:
     return {
         "id": user_record['id'],
         "userName": user_record['userName'],
-        "email": user_record['email']
+        "email": user_record['email'],
+        "user": user_record.get('user')
     }
 
 

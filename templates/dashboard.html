@@ -35,9 +35,19 @@
                 <div class="card-icon">📊</div>
                 <h3>Your Information</h3>
                 <div class="info-list">
+                    {% if user_field %}
+                    <div class="info-item">
+                        <span class="info-label">User:</span>
+                        <span class="info-value">{{ user_field }}</span>
+                    </div>
+                    {% endif %}
                     <div class="info-item">
                         <span class="info-label">Username:</span>
                         <span class="info-value">{{ username }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">{{ email }}</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Roles:</span>
@@ -48,6 +58,7 @@
                         <span class="info-value">Active (8h)</span>
                     </div>
                 </div>
+                <a href="{{ url_for('profile') }}" class="btn btn-secondary" style="margin-top: 1rem; display: inline-block;">Update Profile</a>
             </div>
             
             <div class="card">
