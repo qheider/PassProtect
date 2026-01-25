@@ -25,10 +25,15 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', os.urandom(24))
 app.config['PERMANENT_SESSION_LIFETIME'] = 28800  # 8 hours
 
 # Ollama configuration (using OpenAI SDK with custom base_url)
-openai_client = OpenAI(
-    api_key="ollama",  # Ollama doesn't require a real API key
-    base_url=f"http://{os.getenv('OLLAMA_HOST')}/v1"
-)
+try:
+    openai_client = OpenAI(
+        api_key="ollama",  # Ollama doesn't require a real API key
+        base_url=f"http://{os.getenv('OLLAMA_HOST', 'localhost:11434')}/v1",
+        timeout=30.0  # 30 second timeout
+    )
+except Exception as e:
+    print(f"Warning: Failed to initialize Ollama client: {e}")
+    openai_client = None
 
 
 def login_required(f):
@@ -488,13 +493,20 @@ Always confirm what you're about to do before executing destructive operations (
             messages.extend(conversation_history)
             messages.append({"role": "user", "content": user_message})
             
-            # Call OpenAI
-            completion = openai_client.chat.completions.create(
-                model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
-                messages=messages,
-                tools=openai_tools if openai_tools else None,
-                tool_choice="auto" if openai_tools else None
-            )
+            # Call Ollama (via OpenAI SDK)
+            try:
+                completion = openai_client.chat.completions.create(
+                    model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
+                    messages=messages,
+                    tools=openai_tools if openai_tools else None,
+                    tool_choice="auto" if openai_tools else None,
+                    timeout=30.0
+                )
+            except Exception as e:
+                error_msg = str(e)
+                if "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
+                    raise Exception(f"Could not connect to Ollama server at {os.getenv('OLLAMA_HOST', 'localhost:11434')}. Please ensure Ollama is running and accessible.")
+                raise
             
             assistant_message = completion.choices[0].message
             
@@ -541,10 +553,17 @@ Always confirm what you're about to do before executing destructive operations (
                 
                 messages.extend(tool_results)
                 
-                final_completion = openai_client.chat.completions.create(
-                    model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
-                    messages=messages
-                )
+                try:
+                    final_completion = openai_client.chat.completions.create(
+                        model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
+                        messages=messages,
+                        timeout=30.0
+                    )
+                except Exception as e:
+                    error_msg = str(e)
+                    if "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
+                        raise Exception(f"Could not connect to Ollama server at {os.getenv('OLLAMA_HOST', 'localhost:11434')}. Please ensure Ollama is running and accessible.")
+                    raise
                 
                 final_message = final_completion.choices[0].message.content
                 
@@ -735,8 +754,29 @@ def get_allowed_tools(roles):
 
 if __name__ == '__main__':
     # Check for required environment variables
-    if not os.getenv("OPENAI_API_KEY"):
-        print("❌ Error: OPENAI_API_KEY not found in environment variables")
+    ollama_host = os.getenv("OLLAMA_HOST", "localhost:11434")
+    if not ollama_host:
+        print("❌ Error: OLLAMA_HOST not found in environment variables")
+        print("   Please set OLLAMA_HOST to your Ollama server (e.g., localhost:11434)")
         exit(1)
     
+    # Verify Ollama is accessible
+    print(f"🔍 Checking Ollama connection at http://{ollama_host}/v1...")
+    try:
+        import urllib.request
+        req = urllib.request.Request(f"http://{ollama_host}/v1/models", method='GET')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            print(f"✅ Ollama server is accessible at http://{ollama_host}")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"✅ Ollama server is accessible at http://{ollama_host}")
+        else:
+            print(f"⚠️  Warning: Ollama server returned status code {e.code}")
+    except Exception as e:
+        print(f"❌ Error: Could not connect to Ollama server at http://{ollama_host}")
+        print(f"   Error: {e}")
+        print(f"   Please ensure Ollama is running on {ollama_host}")
+        exit(1)
+    
+    print(f"🚀 Starting Flask application...")
     app.run(debug=True, host='0.0.0.0', port=5000)
