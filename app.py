@@ -578,7 +578,35 @@ Always confirm what you're about to do before executing destructive operations (
                 update_keywords = ['update', 'modify', 'change', 'edit']
                 user_message_lower = user_message.lower()
                 
-                if any(keyword in user_message_lower for keyword in create_keywords):
+                # Check if previous assistant message was asking for company name to update
+                previous_asked_for_update = False
+                if conversation_history and len(conversation_history) >= 1:
+                    last_assistant_msg = None
+                    for msg in reversed(conversation_history):
+                        if msg.get('role') == 'assistant':
+                            last_assistant_msg = msg.get('content', '').lower()
+                            break
+                    if last_assistant_msg and 'update' in last_assistant_msg:
+                        # Check if it's asking for company/service name
+                        asking_patterns = [
+                            'which company', 'which service', 'provide the name',
+                            'specify which company', 'specify which service'
+                        ]
+                        if any(pattern in last_assistant_msg for pattern in asking_patterns):
+                            previous_asked_for_update = True
+                
+                # If previous message asked for company to update, treat current message as company name
+                if previous_asked_for_update and len(user_message.strip().split()) <= 3:
+                    company_name = user_message.strip()
+                    record_data = await fetch_record_for_update(user_id, company_name)
+                    
+                    if record_data:
+                        show_update_form = True
+                        response_text = f"I found the record for {company_name}. Please update the fields you want to change in the form below."
+                    else:
+                        response_text = f"I couldn't find a record for '{company_name}'. Please check the company name and try again."
+                
+                elif any(keyword in user_message_lower for keyword in create_keywords):
                     # Check if they're NOT providing data already
                     has_data = any(indicator in user_message_lower for indicator in ['company:', 'password:', 'name:', '- company', '- password'])
                     
@@ -595,31 +623,59 @@ Always confirm what you're about to do before executing destructive operations (
                         # Try multiple patterns to find company name
                         company_name = None
                         
-                        # Pattern 1: "update [company]" or "update a record [company]"
-                        match = re.search(r'(?:update|modify|change|edit)(?:\s+(?:a\s+)?record)?(?:\s+for)?\s+(.+?)(?:\s*$)', user_message_lower)
-                        if match:
-                            potential_name = match.group(1).strip()
-                            # Clean up common filler words
-                            potential_name = re.sub(r'^(?:for|company|the|a|an)\s+', '', potential_name)
-                            if potential_name and len(potential_name) > 1:
-                                company_name = potential_name
+                        # Generic phrases that are NOT company names (user wants to be prompted)
+                        generic_phrases = [
+                            'existing record', 'a record', 'the record', 'my record',
+                            'existing password', 'a password', 'the password', 'my password',
+                            'a company', 'the company', 'my company', 'existing company',
+                            'record', 'password', 'entry', 'company', 'something'
+                        ]
                         
-                        # Pattern 2: Just a company name after update discussion
-                        if not company_name and len(user_message.strip().split()) <= 3:
-                            # If message is short (1-3 words) after update context, treat as company name
-                            company_name = user_message.strip()
+                        # Check if message is just "update [generic term]" - should prompt for company name
+                        is_generic_request = any(phrase in user_message_lower for phrase in [
+                            'update a record', 'update the record', 'update a password', 
+                            'update a company', 'update the company', 'update my password',
+                            'update my record', 'update record', 'update password', 'update company',
+                            'modify a record', 'modify the record', 'modify a password',
+                            'change a record', 'change the record', 'change a password',
+                            'edit a record', 'edit the record', 'edit a password'
+                        ])
                         
-                        if company_name:
-                            # Fetch the record using a separate async call
-                            record_data = await fetch_record_for_update(user_id, company_name)
-                            
-                            if record_data:
-                                show_update_form = True
-                                response_text = f"I found the record for {company_name}. Please update the fields you want to change in the form below."
-                            else:
-                                response_text = f"I couldn't find a record for '{company_name}'. Please check the company name and try again."
+                        if is_generic_request:
+                            # User is asking to update but hasn't specified which company
+                            response_text = "Which company or service would you like to update? Please provide the name."
                         else:
-                            response_text = "Please specify which company's record you want to update."
+                            # Pattern 1: "update for [company]" - most explicit
+                            match = re.search(r'(?:update|modify|change|edit)(?:\s+(?:a\s+)?(?:record|password|company))?\s+for\s+(.+?)(?:\s*$)', user_message_lower)
+                            if match:
+                                potential_name = match.group(1).strip()
+                                # Clean up common filler words
+                                potential_name = re.sub(r'^(?:company|the|a|an)\s+', '', potential_name)
+                                if potential_name and len(potential_name) > 1 and potential_name not in generic_phrases:
+                                    company_name = potential_name
+                            
+                            # Pattern 2: "update [company]" (no generic terms like "record", "password", "company")
+                            if not company_name:
+                                match = re.search(r'(?:update|modify|change|edit)\s+(?!(?:a\s+|the\s+|my\s+)?(?:record|password|company|entry))(.+?)(?:\s*$)', user_message_lower)
+                                if match:
+                                    potential_name = match.group(1).strip()
+                                    # Clean up common filler words
+                                    potential_name = re.sub(r'^(?:for|company|the|a|an|my|existing)\s+', '', potential_name)
+                                    if potential_name and len(potential_name) > 1 and potential_name not in generic_phrases:
+                                        company_name = potential_name
+                            
+                            if company_name:
+                                # Fetch the record using a separate async call
+                                record_data = await fetch_record_for_update(user_id, company_name)
+                                
+                                if record_data:
+                                    show_update_form = True
+                                    response_text = f"I found the record for {company_name}. Please update the fields you want to change in the form below."
+                                else:
+                                    response_text = f"I couldn't find a record for '{company_name}'. Please check the company name and try again."
+                            else:
+                                # Couldn't extract a specific company name
+                                response_text = "Which company or service would you like to update? Please provide the name."
                 
                 return {
                     'response': response_text,
